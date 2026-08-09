@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iKanbanPilot</title>
+<style>
+  /* ============================================================
+     テーマ変数定義
+     - :root が既定（Light）テーマ
+     - html[data-theme="xxx"] で各テーマの値を上書きする
+     - レイアウトはテーマ間で共通。配色・境界線・影のみ変化させる
+     - 新しいテーマを追加する場合は、この形式でブロックを追加するだけでよい
+     ============================================================ */
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface-alt: #eceef1;
+    --text: #1b1f24;
+    --text-muted: #5b6470;
+    --border: #d0d5dc;
+    --accent: #2f6fed;
+    --accent-text: #ffffff;
+    --shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+    --dragging-opacity: 0.5;
+    --dropzone-bg: #e6edff;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #14161a;
+    --surface: #1f232a;
+    --surface-alt: #262b33;
+    --text: #eef1f5;
+    --text-muted: #9aa3b0;
+    --border: #363c46;
+    --accent: #6d9bff;
+    --accent-text: #10131a;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --dropzone-bg: #2a3550;
+  }
+
+  html[data-theme="blue"] {
+    --bg: #eaf2fb;
+    --surface: #ffffff;
+    --surface-alt: #dbe9fb;
+    --text: #102540;
+    --text-muted: #4a6483;
+    --border: #b7d2f0;
+    --accent: #0b5fcc;
+    --accent-text: #ffffff;
+    --shadow: 0 1px 2px rgba(11, 95, 204, 0.15);
+    --dropzone-bg: #cfe3fb;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+    line-height: 1.5;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  header h1 {
+    font-size: 18px;
+    margin: 0;
+  }
+
+  header p.subtitle {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .theme-switcher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .theme-switcher label {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .theme-switcher select {
+    font-size: 14px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  main {
+    padding: 20px;
+    overflow-x: auto;
+  }
+
+  .board {
+    display: flex;
+    gap: 16px;
+    min-width: 960px;
+  }
+
+  .column {
+    flex: 1 1 0;
+    min-width: 220px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 60vh;
+  }
+
+  .column-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 4px 4px 12px;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 10px;
+  }
+
+  .column-header h2 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .column-count {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 9px;
+    min-width: 22px;
+    text-align: center;
+  }
+
+  .card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-height: 80px;
+    border-radius: 8px;
+    padding: 4px;
+    transition: background-color 0.12s ease;
+  }
+
+  /* ドロップ可能であることを示す状態。色だけに頼らず点線枠も併用する */
+  .card-list.dropzone-active {
+    background: var(--dropzone-bg);
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    box-shadow: var(--shadow);
+    cursor: grab;
+  }
+
+  .card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .card.dragging {
+    opacity: var(--dragging-opacity);
+    border-style: dashed;
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 6px;
+  }
+
+  .card-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 10px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+
+  .card-meta span {
+    white-space: nowrap;
+  }
+
+  footer {
+    padding: 12px 24px 24px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>iKanbanPilot</h1>
+    <p class="subtitle">Kanban UI / テーマ比較検証用 Pilot版</p>
+  </div>
+  <div class="theme-switcher">
+    <label for="theme-select">テーマ</label>
+    <select id="theme-select">
+      <option value="light">Light</option>
+      <option value="dark">Dark</option>
+      <option value="blue">Blue</option>
+    </select>
+  </div>
+</header>
+
+<main>
+  <div class="board" id="board">
+    <!-- 列はJavaScriptでも生成できるが、Pilot版では可読性を優先し静的に記述する -->
+    <section class="column" data-status="todo">
+      <div class="column-header">
+        <h2>未着手</h2>
+        <span class="column-count" data-count-for="todo">0</span>
+      </div>
+      <div class="card-list" data-status="todo"></div>
+    </section>
+
+    <section class="column" data-status="doing">
+      <div class="column-header">
+        <h2>作業中</h2>
+        <span class="column-count" data-count-for="doing">0</span>
+      </div>
+      <div class="card-list" data-status="doing"></div>
+    </section>
+
+    <section class="column" data-status="review">
+      <div class="column-header">
+        <h2>確認待ち</h2>
+        <span class="column-count" data-count-for="review">0</span>
+      </div>
+      <div class="card-list" data-status="review"></div>
+    </section>
+
+    <section class="column" data-status="done">
+      <div class="column-header">
+        <h2>完了</h2>
+        <span class="column-count" data-count-for="done">0</span>
+      </div>
+      <div class="card-list" data-status="done"></div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  iKanbanPilot &mdash; Pilot版のため、カードの配置と内容は保存されません（保存対象はテーマ設定のみ）。
+</footer>
+
+<script>
+  "use strict";
+
+  /* ============================================================
+     サンプルデータ
+     status は各列の data-status と対応させる
+     ============================================================ */
+  var initialCards = [
+    { id: "c1", title: "申請フォームを整理する", assignee: "佐藤", due: "08/12", completedAt: null, status: "todo" },
+    { id: "c2", title: "初期要件を整理する", assignee: "田中", due: "08/13", completedAt: null, status: "todo" },
+    { id: "c3", title: "マニュアルを更新する", assignee: "鈴木", due: "08/15", completedAt: null, status: "doing" },
+    { id: "c4", title: "画面デザインを確認する", assignee: "高橋", due: "08/16", completedAt: null, status: "doing" },
+    { id: "c5", title: "テスト結果をレビューする", assignee: "伊藤", due: "08/09", completedAt: null, status: "review" },
+    { id: "c6", title: "議事録を配布する", assignee: "渡辺", due: null, completedAt: "08/05", status: "done" }
+  ];
+
+  /* ============================================================
+     テーマ管理
+     ============================================================ */
+  var ThemeManager = (function () {
+    var STORAGE_KEY = "ikanbanpilot.theme";
+    var DEFAULT_THEME = "light";
+
+    function apply(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+    }
+
+    function save(theme) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, theme);
+      } catch (e) {
+        // localStorageが使用できない環境では保存をあきらめる（Pilot版として許容）
+      }
+    }
+
+    function load() {
+      try {
+        return window.localStorage.getItem(STORAGE_KEY) || DEFAULT_THEME;
+      } catch (e) {
+        return DEFAULT_THEME;
+      }
+    }
+
+    function init(selectEl) {
+      var theme = load();
+      apply(theme);
+      selectEl.value = theme;
+
+      selectEl.addEventListener("change", function () {
+        var next = selectEl.value;
+        apply(next);
+        save(next);
+      });
+    }
+
+    return { init: init };
+  })();
+
+  /* ============================================================
+     件数更新
+     ============================================================ */
+  var CountUpdater = (function () {
+    function updateAll() {
+      var lists = document.querySelectorAll(".card-list");
+      lists.forEach(function (list) {
+        var status = list.getAttribute("data-status");
+        var count = list.querySelectorAll(".card").length;
+        var badge = document.querySelector('[data-count-for="' + status + '"]');
+        if (badge) {
+          badge.textContent = String(count);
+        }
+      });
+    }
+
+    return { updateAll: updateAll };
+  })();
+
+  /* ============================================================
+     カード生成
+     ============================================================ */
+  function createCardElement(card) {
+    var el = document.createElement("div");
+    el.className = "card";
+    el.draggable = true;
+    el.tabIndex = 0;
+    el.id = card.id;
+    el.setAttribute("data-status", card.status);
+
+    var title = document.createElement("p");
+    title.className = "card-title";
+    title.textContent = card.title;
+    el.appendChild(title);
+
+    var meta = document.createElement("div");
+    meta.className = "card-meta";
+
+    if (card.assignee) {
+      var assigneeSpan = document.createElement("span");
+      assigneeSpan.textContent = "担当: " + card.assignee;
+      meta.appendChild(assigneeSpan);
+    }
+    if (card.due) {
+      var dueSpan = document.createElement("span");
+      dueSpan.textContent = "期限: " + card.due;
+      meta.appendChild(dueSpan);
+    }
+    if (card.completedAt) {
+      var doneSpan = document.createElement("span");
+      doneSpan.textContent = "完了日: " + card.completedAt;
+      meta.appendChild(doneSpan);
+    }
+
+    el.appendChild(meta);
+    return el;
+  }
+
+  function renderInitialCards() {
+    initialCards.forEach(function (card) {
+      var list = document.querySelector('.card-list[data-status="' + card.status + '"]');
+      if (list) {
+        list.appendChild(createCardElement(card));
+      }
+    });
+  }
+
+  /* ============================================================
+     ドラッグ＆ドロップ
+     ============================================================ */
+  var DragAndDrop = (function () {
+    var draggedCard = null;
+
+    function handleDragStart(event) {
+      var card = event.target.closest(".card");
+      if (!card) return;
+      draggedCard = card;
+      card.classList.add("dragging");
+      event.dataTransfer.effectAllowed = "move";
+      // Firefox等でドラッグを開始させるために必要
+      event.dataTransfer.setData("text/plain", card.id);
+    }
+
+    function handleDragEnd(event) {
+      var card = event.target.closest(".card");
+      if (card) {
+        card.classList.remove("dragging");
+      }
+      draggedCard = null;
+      clearAllDropzones();
+    }
+
+    function handleDragOver(event) {
+      var list = event.target.closest(".card-list");
+      if (!list) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      list.classList.add("dropzone-active");
+    }
+
+    function handleDragLeave(event) {
+      var list = event.target.closest(".card-list");
+      if (!list) return;
+      // 子要素間の移動でも一旦leaveが発生するため、実際に外に出た場合のみ解除する
+      if (!list.contains(event.relatedTarget)) {
+        list.classList.remove("dropzone-active");
+      }
+    }
+
+    function handleDrop(event) {
+      var list = event.target.closest(".card-list");
+      if (!list || !draggedCard) return;
+      event.preventDefault();
+
+      var newStatus = list.getAttribute("data-status");
+      draggedCard.setAttribute("data-status", newStatus);
+      list.appendChild(draggedCard);
+
+      clearAllDropzones();
+      CountUpdater.updateAll();
+    }
+
+    function clearAllDropzones() {
+      document.querySelectorAll(".card-list.dropzone-active").forEach(function (list) {
+        list.classList.remove("dropzone-active");
+      });
+    }
+
+    function init(boardEl) {
+      boardEl.addEventListener("dragstart", handleDragStart);
+      boardEl.addEventListener("dragend", handleDragEnd);
+      boardEl.addEventListener("dragover", handleDragOver);
+      boardEl.addEventListener("dragleave", handleDragLeave);
+      boardEl.addEventListener("drop", handleDrop);
+    }
+
+    return { init: init };
+  })();
+
+  /* ============================================================
+     初期化
+     ============================================================ */
+  document.addEventListener("DOMContentLoaded", function () {
+    ThemeManager.init(document.getElementById("theme-select"));
+    renderInitialCards();
+    DragAndDrop.init(document.getElementById("board"));
+    CountUpdater.updateAll();
+  });
+</script>
+
+</body>
+</html>
