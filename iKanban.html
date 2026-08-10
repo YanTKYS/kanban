@@ -507,7 +507,8 @@
     var STORAGE_KEY = "ikanban.board.v1";
 
     // 4列すべてがID配列として揃っているか、cardsがオブジェクトかを確認する。
-    // 一部の列だけ欠損したデータをここで弾き、描画時のエラーを防ぐ。
+    // 一部の列だけ欠損したデータや、存在しないカードIDを参照するデータを
+    // ここで弾き、描画時のエラーを防ぐ。
     function isValidBoard(data) {
       if (!data || typeof data.cards !== "object" || data.cards === null) {
         return false;
@@ -515,18 +516,28 @@
       if (!data.columns || typeof data.columns !== "object") {
         return false;
       }
-      return STATUSES.every(function (status) {
+      var columnsValid = STATUSES.every(function (status) {
         return Array.isArray(data.columns[status]);
+      });
+      if (!columnsValid) {
+        return false;
+      }
+      return STATUSES.every(function (status) {
+        return data.columns[status].every(function (id) {
+          return Object.prototype.hasOwnProperty.call(data.cards, id);
+        });
       });
     }
 
-    // 破損データは上書きせず、復旧前に退避キーへ保存しておく。
+    // 破損データを退避キーへ保存する。成功したかどうかを呼び出し側へ返す。
     function backupCorruptedData(raw) {
       try {
         var backupKey = STORAGE_KEY + ".corrupted." + Date.now();
         window.localStorage.setItem(backupKey, raw);
+        return true;
       } catch (e) {
-        // 退避にも失敗した場合はそのまま復旧処理を続ける
+        console.warn("iKanban: 破損データの退避に失敗しました。", e);
+        return false;
       }
     }
 
@@ -555,9 +566,14 @@
         return parsed;
       }
 
-      backupCorruptedData(raw);
+      var backedUp = backupCorruptedData(raw);
       var recovered = buildInitialBoard();
-      save(recovered);
+      if (backedUp) {
+        // 退避に成功した場合のみ、元データを初期データで上書きする
+        save(recovered);
+      } else {
+        console.warn("iKanban: 破損データを退避できなかったため、保存データは上書きしていません。今回は初期データで表示します。");
+      }
       return recovered;
     }
 
@@ -565,7 +581,7 @@
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
       } catch (e) {
-        // localStorageが使用できない環境では保存をあきらめる
+        console.warn("iKanban: 保存に失敗しました。変更が次回起動時に反映されない可能性があります。", e);
       }
     }
 
@@ -593,7 +609,7 @@
       try {
         window.localStorage.setItem(STORAGE_KEY, theme);
       } catch (e) {
-        // 保存できない環境では諦める
+        console.warn("iKanban: テーマの保存に失敗しました。", e);
       }
     }
 
