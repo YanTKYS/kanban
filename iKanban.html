@@ -495,7 +495,7 @@
 <header>
   <div>
     <h1>iKanban</h1>
-    <p class="subtitle">個人用の実用最小Kanban（v0.2.1）</p>
+    <p class="subtitle">個人用の実用最小Kanban（v0.2.2）</p>
   </div>
   <div class="header-controls">
     <div class="header-actions">
@@ -755,7 +755,9 @@
       selectEl.addEventListener("change", function () {
         var next = sanitizeTheme(selectEl.value);
         apply(next);
-        save(next);
+        if (!save(next)) {
+          notifySaveFailure();
+        }
       });
     }
 
@@ -846,8 +848,35 @@
   var state = null;
   var columnLabels = null;
 
+  // 保存できなかったことに気づかないまま操作を続けると、再読み込みで内容が
+  // 失われてしまう。ただし操作のたびに知らせても邪魔になるだけなので、
+  // ページを開いている間に一度だけ伝える。
+  var saveFailureNotified = false;
+
+  function notifySaveFailure() {
+    if (saveFailureNotified) return;
+    saveFailureNotified = true;
+    window.alert(
+      "変更をこのブラウザに保存できませんでした。\n" +
+      "操作はこのまま続けられますが、ページを再読み込みすると変更が失われる可能性があります。\n" +
+      "ブラウザの保存容量やプライベートモードの設定をご確認ください。"
+    );
+  }
+
   function persist() {
-    BoardStore.save(state);
+    if (!BoardStore.save(state)) {
+      notifySaveFailure();
+    }
+  }
+
+  // カードが現在どの列にあるかを返す（見つからない場合は null）
+  function findStatusOf(id) {
+    for (var i = 0; i < STATUSES.length; i++) {
+      if (state.columns[STATUSES[i]].indexOf(id) !== -1) {
+        return STATUSES[i];
+      }
+    }
+    return null;
   }
 
   /* ============================================================
@@ -863,7 +892,7 @@
       state.cards[id] = { title: trimmedTitle, note: note.trim() };
       state.columns[status].push(id);
       persist();
-      Renderer.renderAll();
+      Renderer.appendCard(status, id);
       return true;
     }
 
@@ -874,21 +903,20 @@
       }
       state.cards[id] = { title: trimmedTitle, note: note.trim() };
       persist();
-      Renderer.renderAll();
+      Renderer.refreshCard(id);
       return true;
     }
 
     function deleteCard(id) {
+      var status = findStatusOf(id);
+      if (status === null) {
+        return;
+      }
+      var list = state.columns[status];
+      list.splice(list.indexOf(id), 1);
       delete state.cards[id];
-      STATUSES.forEach(function (status) {
-        var list = state.columns[status];
-        var index = list.indexOf(id);
-        if (index !== -1) {
-          list.splice(index, 1);
-        }
-      });
       persist();
-      Renderer.renderAll();
+      Renderer.removeCard(status, id);
     }
 
     return { addCard: addCard, editCard: editCard, deleteCard: deleteCard };
@@ -896,30 +924,86 @@
 
   /* ============================================================
      描画
+
+     画面全体を描き直す renderAll は、起動時・リセット・バックアップ復元など
+     ボードの内容がまるごと入れ替わるときだけに使う。
+     カード1枚の追加・編集・削除・移動では、変化した箇所だけを更新する。
+     全体を描き直すと、開いたままのカード編集フォームが別の操作をした拍子に
+     消えて入力途中の内容が失われるため（例：カードAを編集中に別の列でカードを
+     追加すると、Aの編集内容が消える）。
+
+     state.columns の並び順とカード一覧のDOMの並び順は常に一致させる。
+     ドロップ位置の判定はDOM側の並びを見て行うため、この一致が前提になる。
      ============================================================ */
   var Renderer = (function () {
-    function renderAll() {
-      STATUSES.forEach(function (status) {
-        renderColumn(status);
-      });
+    function listOf(status) {
+      return document.querySelector('.card-list[data-status="' + status + '"]');
     }
 
-    // カードの再描画と件数表示は必ずセットで行う。
-    // 件数は実際に描画したカード数から数えるため、画面と食い違うことがない。
+    // 件数は実際に表示しているカード数から数えるため、画面と食い違うことがない
+    function updateCount(status) {
+      document.querySelector('[data-count-for="' + status + '"]').textContent =
+        String(listOf(status).children.length);
+    }
+
+    function renderAll() {
+      STATUSES.forEach(renderColumn);
+    }
+
     function renderColumn(status) {
-      var list = document.querySelector('.card-list[data-status="' + status + '"]');
+      var list = listOf(status);
       list.innerHTML = "";
 
-      var count = 0;
       state.columns[status].forEach(function (id) {
         var card = state.cards[id];
         if (card) {
           list.appendChild(buildCardElement(id, card, status));
-          count += 1;
         }
       });
 
-      document.querySelector('[data-count-for="' + status + '"]').textContent = String(count);
+      updateCount(status);
+    }
+
+    // 追加したカードは列の末尾に入る。カードが多い列では画面外になり
+    // 「追加できていない」ように見えるため、末尾までスクロールして見せる。
+    function appendCard(status, id) {
+      var list = listOf(status);
+      list.appendChild(buildCardElement(id, state.cards[id], status));
+      updateCount(status);
+      list.scrollTop = list.scrollHeight;
+    }
+
+    function removeCard(status, id) {
+      var el = document.getElementById(id);
+      if (el) {
+        el.remove();
+      }
+      updateCount(status);
+    }
+
+    // 編集フォームを閉じ、更新後の内容で表示に戻す
+    function refreshCard(id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.draggable = true;
+      renderCardDisplay(el, id, state.cards[id]);
+    }
+
+    // index は移動後の state.columns[newStatus] における位置。
+    // 先に元の位置から取り除いてから挿入するため、そのまま同じ位置に入る。
+    function moveCardTo(id, oldStatus, newStatus, index) {
+      var el = document.getElementById(id);
+      if (!el) return;
+
+      var list = listOf(newStatus);
+      el.remove();
+      el.setAttribute("data-status", newStatus);
+      list.insertBefore(el, list.children[index] || null);
+
+      updateCount(newStatus);
+      if (oldStatus !== newStatus) {
+        updateCount(oldStatus);
+      }
     }
 
     function buildCardElement(id, card, status) {
@@ -1104,7 +1188,14 @@
       titleInput.focus();
     }
 
-    return { renderAll: renderAll, renderAddCardArea: renderAddCardArea };
+    return {
+      renderAll: renderAll,
+      renderAddCardArea: renderAddCardArea,
+      appendCard: appendCard,
+      removeCard: removeCard,
+      refreshCard: refreshCard,
+      moveCardTo: moveCardTo
+    };
   })();
 
   /* ============================================================
@@ -1181,7 +1272,9 @@
           return;
         }
         columnLabels[status] = trimmed;
-        ColumnLabels.save(columnLabels);
+        if (!ColumnLabels.save(columnLabels)) {
+          notifySaveFailure();
+        }
         showDisplay(status);
       });
 
@@ -1207,18 +1300,38 @@
      ドラッグ＆ドロップ（列間移動＋同一列内の並び替え）
      ============================================================ */
   var DragAndDrop = (function () {
-    var draggedId = null;
+    // ポインタが列の上下端からこの距離に入ったら、列内を自動スクロールする
+    var AUTO_SCROLL_EDGE = 36;
+    var AUTO_SCROLL_STEP = 12;
 
-    function clearInsertMarkers() {
-      document.querySelectorAll(".card.insert-before, .card.insert-after").forEach(function (el) {
-        el.classList.remove("insert-before", "insert-after");
-      });
+    // ドラッグ中の状態は、対象の要素を覚えておいて直接付け外しする。
+    // 画面全体を検索して目印を消して回ると、dragover のたびにDOM全体を
+    // 走査することになり、カードが増えるほど動きが重くなるため。
+    var draggedEl = null;
+    var markedCard = null; // 挿入線を表示しているカード
+    var activeList = null; // ドロップ先として強調しているカード一覧
+
+    function clearInsertMarker() {
+      if (markedCard) {
+        markedCard.classList.remove("insert-before", "insert-after");
+        markedCard = null;
+      }
     }
 
-    function clearDropzones() {
-      document.querySelectorAll(".card-list.dropzone-active").forEach(function (el) {
-        el.classList.remove("dropzone-active");
-      });
+    function setActiveList(list) {
+      if (activeList === list) return;
+      if (activeList) {
+        activeList.classList.remove("dropzone-active");
+      }
+      activeList = list;
+      if (activeList) {
+        activeList.classList.add("dropzone-active");
+      }
+    }
+
+    function clearDragFeedback() {
+      clearInsertMarker();
+      setActiveList(null);
     }
 
     // リスト内のカードを上から見て、ポインタのY座標が入る位置を返す（0〜カード数）。
@@ -1238,14 +1351,28 @@
 
     // 挿入位置を示す線を、対象のカードの上辺または下辺に表示する
     function showInsertMarker(list, insertIndex) {
-      clearInsertMarkers();
+      clearInsertMarker();
       var cards = list.querySelectorAll(".card");
       if (cards.length === 0) return;
 
       if (insertIndex < cards.length) {
-        cards[insertIndex].classList.add("insert-before");
+        markedCard = cards[insertIndex];
+        markedCard.classList.add("insert-before");
       } else {
-        cards[cards.length - 1].classList.add("insert-after");
+        markedCard = cards[cards.length - 1];
+        markedCard.classList.add("insert-after");
+      }
+    }
+
+    // ドラッグ中はマウスホイールで列内をスクロールできないため、
+    // カードの多い列では画面外の位置へ移動できなくなる。
+    // 列の上下端に近づいたら少しずつスクロールして、その位置まで運べるようにする。
+    function autoScroll(list, clientY) {
+      var rect = list.getBoundingClientRect();
+      if (clientY < rect.top + AUTO_SCROLL_EDGE) {
+        list.scrollTop -= AUTO_SCROLL_STEP;
+      } else if (clientY > rect.bottom - AUTO_SCROLL_EDGE) {
+        list.scrollTop += AUTO_SCROLL_STEP;
       }
     }
 
@@ -1255,58 +1382,47 @@
       // 入力欄の文字列を選択してドラッグした場合に、カードごと
       // 移動してしまい編集内容が失われるのを防ぐ。
       if (!card || !card.draggable) return;
-      draggedId = card.id;
+      draggedEl = card;
       card.classList.add("dragging");
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("text/plain", card.id);
     }
 
-    function handleDragEnd(event) {
-      var card = event.target.closest(".card");
-      if (card) {
-        card.classList.remove("dragging");
+    function handleDragEnd() {
+      if (draggedEl) {
+        draggedEl.classList.remove("dragging");
+        draggedEl = null;
       }
-      draggedId = null;
-      clearInsertMarkers();
-      clearDropzones();
+      clearDragFeedback();
     }
 
     function handleDragOver(event) {
       var list = event.target.closest(".card-list");
-      if (!list || !draggedId) return;
+      if (!list || !draggedEl) return;
       event.preventDefault();
       event.dataTransfer.dropEffect = "move";
-      list.classList.add("dropzone-active");
 
+      setActiveList(list);
+      autoScroll(list, event.clientY);
       showInsertMarker(list, getInsertIndex(list, event.clientY));
     }
 
+    // 子要素をまたぐたびにleaveが発生するため、強調中の列から実際に
+    // 出た場合のみ解除する
     function handleDragLeave(event) {
-      var list = event.target.closest(".card-list");
-      if (!list) return;
-      if (!list.contains(event.relatedTarget)) {
-        list.classList.remove("dropzone-active");
-      }
+      if (!activeList || activeList.contains(event.relatedTarget)) return;
+      clearDragFeedback();
     }
 
     function handleDrop(event) {
       var list = event.target.closest(".card-list");
-      if (!list || !draggedId) return;
+      if (!list || !draggedEl) return;
       event.preventDefault();
 
-      moveCard(draggedId, list.getAttribute("data-status"), getInsertIndex(list, event.clientY));
-
-      clearInsertMarkers();
-      clearDropzones();
-    }
-
-    function findStatusOf(id) {
-      for (var i = 0; i < STATUSES.length; i++) {
-        if (state.columns[STATUSES[i]].indexOf(id) !== -1) {
-          return STATUSES[i];
-        }
-      }
-      return null;
+      var id = draggedEl.id;
+      var insertIndex = getInsertIndex(list, event.clientY);
+      clearDragFeedback();
+      moveCard(id, list.getAttribute("data-status"), insertIndex);
     }
 
     // insertIndex は「移動前の並び」での位置。移動元から取り除いた分だけ
@@ -1315,18 +1431,20 @@
       var oldStatus = findStatusOf(id);
       if (oldStatus === null) return;
 
-      var oldIndex = state.columns[oldStatus].indexOf(id);
-      state.columns[oldStatus].splice(oldIndex, 1);
+      var from = state.columns[oldStatus];
+      var oldIndex = from.indexOf(id);
+      from.splice(oldIndex, 1);
 
       if (oldStatus === newStatus && oldIndex < insertIndex) {
         insertIndex -= 1;
       }
 
-      var target = state.columns[newStatus];
-      target.splice(Math.max(0, Math.min(insertIndex, target.length)), 0, id);
+      var to = state.columns[newStatus];
+      var index = Math.max(0, Math.min(insertIndex, to.length));
+      to.splice(index, 0, id);
 
       persist();
-      Renderer.renderAll();
+      Renderer.moveCardTo(id, oldStatus, newStatus, index);
     }
 
     function init(boardEl) {
@@ -1402,7 +1520,12 @@
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+
+      // クリック直後に同期的に解放すると、ブラウザによっては保存が
+      // 始まる前にデータが消え、ダウンロードに失敗する。少し待ってから解放する。
+      setTimeout(function () {
+        URL.revokeObjectURL(url);
+      }, 1000);
     }
 
     // 復元データ（およびlocalStorageへ退避した「直前の復元前状態」）として
