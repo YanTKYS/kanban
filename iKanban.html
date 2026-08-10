@@ -72,6 +72,9 @@
     color: var(--text);
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
     line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
 
   header {
@@ -83,6 +86,7 @@
     padding: 16px 24px;
     border-bottom: 1px solid var(--border);
     background: var(--surface);
+    flex-shrink: 0;
   }
 
   header h1 {
@@ -160,14 +164,24 @@
   main {
     padding: 20px;
     overflow-x: auto;
+    overflow-y: hidden;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
   }
 
   .board {
     display: flex;
     gap: 16px;
     min-width: 960px;
+    flex: 1;
+    min-height: 0;
   }
 
+  /* 列自体の高さは .board（main の残り高さ）に合わせて伸縮する。
+     カードが増えても列の外枠は伸びず、内側の .card-list だけが
+     スクロールする（下部で overflow-y: auto を指定） */
   .column {
     flex: 1 1 0;
     min-width: 240px;
@@ -177,9 +191,9 @@
     padding: 12px;
     display: flex;
     flex-direction: column;
-    min-height: 60vh;
   }
 
+  /* ヘッダーとカード追加領域はスクロールさせない固定部分 */
   .column-header {
     display: flex;
     align-items: baseline;
@@ -187,6 +201,7 @@
     padding: 4px 4px 12px;
     border-bottom: 2px solid var(--border);
     margin-bottom: 10px;
+    flex-shrink: 0;
   }
 
   .column-header h2 {
@@ -207,6 +222,9 @@
     text-align: center;
   }
 
+  /* カード一覧のみを列内で独立スクロールさせる部分。
+     min-height を明示しておくことで、カードが増えても列全体を
+     押し広げず、この領域内だけが縦スクロールになる */
   .card-list {
     display: flex;
     flex-direction: column;
@@ -215,6 +233,7 @@
     min-height: 60px;
     border-radius: 8px;
     padding: 4px;
+    overflow-y: auto;
     transition: background-color 0.12s ease;
   }
 
@@ -326,6 +345,7 @@
 
   .add-card-area {
     margin-top: 8px;
+    flex-shrink: 0;
   }
 
   .add-card-trigger {
@@ -395,6 +415,7 @@
     padding: 12px 24px 24px;
     font-size: 11.5px;
     color: var(--text-muted);
+    flex-shrink: 0;
   }
 </style>
 </head>
@@ -403,7 +424,7 @@
 <header>
   <div>
     <h1>iKanban</h1>
-    <p class="subtitle">個人用の実用最小Kanban（v0.1.0）</p>
+    <p class="subtitle">個人用の実用最小Kanban（v0.1.4）</p>
   </div>
   <div class="header-controls">
     <button type="button" class="btn" id="reset-button">初期状態にリセット</button>
