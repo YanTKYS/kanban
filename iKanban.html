@@ -107,6 +107,13 @@
     flex-wrap: wrap;
   }
 
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
   .theme-switcher {
     display: flex;
     align-items: center;
@@ -149,6 +156,11 @@
     background: var(--accent);
     color: var(--accent-text);
     border-color: var(--accent);
+  }
+
+  .btn-xs {
+    font-size: 11.5px;
+    padding: 3px 8px;
   }
 
   .btn:focus-visible,
@@ -198,6 +210,7 @@
     display: flex;
     align-items: baseline;
     justify-content: space-between;
+    flex-wrap: wrap;
     padding: 4px 4px 12px;
     border-bottom: 2px solid var(--border);
     margin-bottom: 10px;
@@ -208,6 +221,55 @@
     font-size: 14px;
     font-weight: 600;
     margin: 0;
+  }
+
+  .column-title {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    min-width: 0;
+  }
+
+  /* 列名の編集ボタン。カード操作（追加・削除）より主張しないよう、
+     通常時は控えめな不透明度にし、ホバー・フォーカス時のみ強調する */
+  .column-label-edit-btn {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    line-height: 1;
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    opacity: 0.55;
+  }
+
+  .column-label-edit-btn:hover,
+  .column-label-edit-btn:focus-visible {
+    opacity: 1;
+    background: var(--surface);
+  }
+
+  .column-label-edit-form {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex: 1 1 100%;
+  }
+
+  .column-label-input {
+    font-family: inherit;
+    font-size: 13px;
+    padding: 3px 6px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    flex: 1 1 auto;
+    min-width: 60px;
   }
 
   .column-count {
@@ -424,10 +486,15 @@
 <header>
   <div>
     <h1>iKanban</h1>
-    <p class="subtitle">個人用の実用最小Kanban（v0.1.4）</p>
+    <p class="subtitle">個人用の実用最小Kanban（v0.2.0）</p>
   </div>
   <div class="header-controls">
-    <button type="button" class="btn" id="reset-button">初期状態にリセット</button>
+    <div class="header-actions">
+      <button type="button" class="btn" id="reset-button">初期状態にリセット</button>
+      <button type="button" class="btn" id="export-button">バックアップ出力</button>
+      <button type="button" class="btn" id="restore-button">バックアップ復元</button>
+      <input type="file" id="restore-file-input" class="visually-hidden" accept="application/json,.json">
+    </div>
     <div class="theme-switcher">
       <label for="theme-select">テーマ</label>
       <select id="theme-select">
@@ -443,7 +510,7 @@
   <div class="board" id="board">
     <section class="column" data-status="todo">
       <div class="column-header">
-        <h2>未着手</h2>
+        <span class="column-title" data-status="todo"></span>
         <span class="column-count" data-count-for="todo">0</span>
       </div>
       <div class="card-list" data-status="todo"></div>
@@ -452,7 +519,7 @@
 
     <section class="column" data-status="doing">
       <div class="column-header">
-        <h2>作業中</h2>
+        <span class="column-title" data-status="doing"></span>
         <span class="column-count" data-count-for="doing">0</span>
       </div>
       <div class="card-list" data-status="doing"></div>
@@ -461,7 +528,7 @@
 
     <section class="column" data-status="review">
       <div class="column-header">
-        <h2>確認待ち</h2>
+        <span class="column-title" data-status="review"></span>
         <span class="column-count" data-count-for="review">0</span>
       </div>
       <div class="card-list" data-status="review"></div>
@@ -470,7 +537,7 @@
 
     <section class="column" data-status="done">
       <div class="column-header">
-        <h2>完了</h2>
+        <span class="column-title" data-status="done"></span>
         <span class="column-count" data-count-for="done">0</span>
       </div>
       <div class="card-list" data-status="done"></div>
@@ -480,7 +547,7 @@
 </main>
 
 <footer>
-  iKanban &mdash; カードとテーマ設定はこのブラウザの localStorage に保存されます。ブラウザのデータを削除すると内容も失われます。
+  iKanban &mdash; カード・列の表示名・テーマ設定はこのブラウザの localStorage に保存されます。ブラウザのデータを削除すると内容も失われます。内容はヘッダーの「バックアップ出力」からJSONファイルへ書き出せます。
 </footer>
 
 <script>
@@ -614,7 +681,7 @@
       return initial;
     }
 
-    return { load: load, save: save, reset: reset };
+    return { load: load, save: save, reset: reset, isValidBoard: isValidBoard };
   })();
 
   /* ============================================================
@@ -624,18 +691,25 @@
     var STORAGE_KEY = "ikanban.theme.v1";
     var DEFAULT_THEME = "light";
     var ALLOWED_THEMES = ["light", "dark", "blue"];
+    var selectEl = null;
+    var current = DEFAULT_THEME;
+
+    function isValidTheme(theme) {
+      return ALLOWED_THEMES.indexOf(theme) !== -1;
+    }
 
     // 許可された3テーマ以外は初期値へフォールバックする。
     // 保存値が壊れていた場合、data-theme に不明な値が入りどのCSSブロックにも
     // 一致せず配色が変わらないままになる（＝切替が効かないように見える）ため、
     // ここで必ず既知の値へ寄せておく。
     function sanitizeTheme(theme) {
-      return ALLOWED_THEMES.indexOf(theme) !== -1 ? theme : DEFAULT_THEME;
+      return isValidTheme(theme) ? theme : DEFAULT_THEME;
     }
 
     // 画面への反映のみを行う。保存の成否に関わらず、選択した瞬間に必ず呼ばれる。
     function apply(theme) {
       document.documentElement.setAttribute("data-theme", theme);
+      current = theme;
     }
 
     // 保存のみを行う。失敗してもその場の表示（apply）には影響させない。
@@ -656,7 +730,8 @@
       }
     }
 
-    function init(selectEl) {
+    function init(el) {
+      selectEl = el;
       var theme = load();
       apply(theme);
       selectEl.value = theme;
@@ -668,13 +743,88 @@
       });
     }
 
-    return { init: init };
+    // バックアップ復元時に外部からテーマを設定するための入口。
+    // 表示・保存・セレクトボックスの選択状態を一括で揃える。
+    function setAndPersist(theme) {
+      var next = sanitizeTheme(theme);
+      apply(next);
+      save(next);
+      if (selectEl) {
+        selectEl.value = next;
+      }
+    }
+
+    function getCurrent() {
+      return current;
+    }
+
+    return { init: init, isValidTheme: isValidTheme, setAndPersist: setAndPersist, getCurrent: getCurrent };
   })();
 
   /* ============================================================
-     アプリ状態（メモリ上の現在値。BoardStoreの内容を保持する）
+     列表示名（内部ID todo/doing/review/done は固定。表示名のみ変更可能）
+     ============================================================ */
+  var ColumnLabels = (function () {
+    var STORAGE_KEY = "ikanban.columnLabels.v1";
+    var DEFAULT_LABELS = { todo: "未着手", doing: "作業中", review: "確認待ち", done: "完了" };
+
+    function cloneDefaults() {
+      var result = {};
+      STATUSES.forEach(function (status) {
+        result[status] = DEFAULT_LABELS[status];
+      });
+      return result;
+    }
+
+    function isValidLabels(data) {
+      if (!data || typeof data !== "object") {
+        return false;
+      }
+      return STATUSES.every(function (status) {
+        return typeof data[status] === "string" && data[status].trim() !== "";
+      });
+    }
+
+    // 保存値の一部が欠けたり壊れていても、使える列だけ採用し残りは既定値で
+    // 補う。テーマ（全体を初期値へフォールバック）と違い、列名は列ごとに
+    // 独立した値なので、部分的な復旧の方が利用者の設定を活かせる。
+    function sanitize(data) {
+      var result = {};
+      STATUSES.forEach(function (status) {
+        var value = data && data[status];
+        result[status] = (typeof value === "string" && value.trim() !== "") ? value.trim() : DEFAULT_LABELS[status];
+      });
+      return result;
+    }
+
+    function load() {
+      try {
+        var raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          return cloneDefaults();
+        }
+        return sanitize(JSON.parse(raw));
+      } catch (e) {
+        return cloneDefaults();
+      }
+    }
+
+    function save(labels) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(labels));
+      } catch (e) {
+        console.warn("iKanban: 列表示名の保存に失敗しました。", e);
+      }
+    }
+
+    return { load: load, save: save, sanitize: sanitize, isValidLabels: isValidLabels };
+  })();
+
+  /* ============================================================
+     アプリ状態（メモリ上の現在値。BoardStore / ColumnLabels の内容を保持する）
      ============================================================ */
   var state = null;
+  var columnLabels = null;
 
   function persist() {
     BoardStore.save(state);
@@ -938,6 +1088,102 @@
   })();
 
   /* ============================================================
+     列名編集UI（列ヘッダーの表示名クリック→編集。内部IDは変更しない）
+     ============================================================ */
+  var ColumnLabelEditor = (function () {
+    function buildDisplay(status) {
+      var frag = document.createDocumentFragment();
+
+      var h2 = document.createElement("h2");
+      h2.textContent = columnLabels[status];
+
+      var editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.className = "column-label-edit-btn";
+      editBtn.setAttribute("aria-label", "列名を編集: " + columnLabels[status]);
+      editBtn.textContent = "✎";
+      editBtn.addEventListener("click", function () {
+        startEdit(status);
+      });
+
+      frag.appendChild(h2);
+      frag.appendChild(editBtn);
+      return frag;
+    }
+
+    function titleElOf(status) {
+      return document.querySelector('.column-title[data-status="' + status + '"]');
+    }
+
+    function showDisplay(status) {
+      var titleEl = titleElOf(status);
+      titleEl.innerHTML = "";
+      titleEl.appendChild(buildDisplay(status));
+    }
+
+    function startEdit(status) {
+      var titleEl = titleElOf(status);
+      titleEl.innerHTML = "";
+
+      var form = document.createElement("form");
+      form.className = "column-label-edit-form";
+
+      var label = document.createElement("label");
+      label.className = "visually-hidden";
+      label.setAttribute("for", "column-label-" + status);
+      label.textContent = "列名";
+
+      var input = document.createElement("input");
+      input.type = "text";
+      input.id = "column-label-" + status;
+      input.className = "column-label-input";
+      input.value = columnLabels[status];
+      input.required = true;
+
+      var saveBtn = document.createElement("button");
+      saveBtn.type = "submit";
+      saveBtn.className = "btn btn-xs btn-primary";
+      saveBtn.textContent = "保存";
+
+      var cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "btn btn-xs";
+      cancelBtn.textContent = "キャンセル";
+      cancelBtn.addEventListener("click", function () {
+        showDisplay(status);
+      });
+
+      // 空文字だけの列名は保存しない（inputのrequiredでブラウザが送信を止める）
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        var trimmed = input.value.trim();
+        if (!trimmed) {
+          return;
+        }
+        columnLabels[status] = trimmed;
+        ColumnLabels.save(columnLabels);
+        showDisplay(status);
+      });
+
+      form.appendChild(label);
+      form.appendChild(input);
+      form.appendChild(saveBtn);
+      form.appendChild(cancelBtn);
+      titleEl.appendChild(form);
+
+      input.focus();
+      input.select();
+    }
+
+    // 初期化時、およびバックアップ復元後に全列の表示を現在のcolumnLabelsへ揃える
+    function renderAll() {
+      STATUSES.forEach(showDisplay);
+    }
+
+    return { renderAll: renderAll };
+  })();
+
+  /* ============================================================
      ドラッグ＆ドロップ（列間移動＋同一列内の並び替え）
      ============================================================ */
   var DragAndDrop = (function () {
@@ -1080,7 +1326,8 @@
   function initResetButton(buttonEl) {
     buttonEl.addEventListener("click", function () {
       var confirmed = window.confirm(
-        "Kanbanの内容を初期状態に戻します。追加・編集・削除・並び替えの内容は失われます。よろしいですか？"
+        "Kanbanの内容を初期状態に戻します。追加・編集・削除・並び替えの内容は失われます。\n" +
+        "列の表示名とテーマは変更されません。よろしいですか？"
       );
       if (!confirmed) return;
       state = BoardStore.reset();
@@ -1089,15 +1336,181 @@
   }
 
   /* ============================================================
+     バックアップ出力・復元
+     ============================================================ */
+  var BackupRestore = (function () {
+    var APP_NAME = "iKanban";
+    var CURRENT_FORMAT_VERSION = 1;
+    var SUPPORTED_FORMAT_VERSIONS = [1];
+
+    function pad2(n) {
+      return n < 10 ? "0" + n : String(n);
+    }
+
+    // ファイル名用の日時文字列（例: 20260810-235959）。複数回出力しても
+    // 上書きされず判別しやすいよう、ブラウザのローカル時刻を使う。
+    function timestampForFilename(date) {
+      return date.getFullYear() + pad2(date.getMonth() + 1) + pad2(date.getDate()) +
+        "-" + pad2(date.getHours()) + pad2(date.getMinutes()) + pad2(date.getSeconds());
+    }
+
+    function buildExportData() {
+      return {
+        app: APP_NAME,
+        formatVersion: CURRENT_FORMAT_VERSION,
+        exportedAt: new Date().toISOString(),
+        board: { cards: state.cards, columns: state.columns },
+        columnLabels: columnLabels,
+        theme: ThemeManager.getCurrent()
+      };
+    }
+
+    function download() {
+      var data = buildExportData();
+      var blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      var url = URL.createObjectURL(blob);
+
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = "ikanban-backup-" + timestampForFilename(new Date()) + ".json";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // 復元データとして妥当かを検証する。検証ロジックは各モジュールが
+    // 持つものをそのまま再利用し、ここでは重複させない。
+    function isValidImportData(data) {
+      if (!data || typeof data !== "object") {
+        return false;
+      }
+      if (data.app !== APP_NAME) {
+        return false;
+      }
+      if (SUPPORTED_FORMAT_VERSIONS.indexOf(data.formatVersion) === -1) {
+        return false;
+      }
+      if (!BoardStore.isValidBoard(data.board)) {
+        return false;
+      }
+      if (!ColumnLabels.isValidLabels(data.columnLabels)) {
+        return false;
+      }
+      if (!ThemeManager.isValidTheme(data.theme)) {
+        return false;
+      }
+      return true;
+    }
+
+    // 復元直前の状態を退避する。失敗した場合は呼び出し側で復元処理そのものを
+    // 中止させ、「復元で現在データを不可逆に失う」ことがないようにする。
+    function snapshotBeforeRestore() {
+      try {
+        var key = "ikanban.board.v1.before-restore." + Date.now();
+        window.localStorage.setItem(key, JSON.stringify(buildExportData()));
+        return true;
+      } catch (e) {
+        console.warn("iKanban: 復元前バックアップの退避に失敗しました。", e);
+        return false;
+      }
+    }
+
+    function applyImportedData(data) {
+      state = { cards: data.board.cards, columns: data.board.columns };
+      columnLabels = ColumnLabels.sanitize(data.columnLabels);
+
+      BoardStore.save(state);
+      ColumnLabels.save(columnLabels);
+      ThemeManager.setAndPersist(data.theme);
+
+      Renderer.renderAll();
+      STATUSES.forEach(Renderer.renderAddCardArea);
+      ColumnLabelEditor.renderAll();
+    }
+
+    function restoreFromFile(file) {
+      var reader = new FileReader();
+
+      reader.onload = function () {
+        var parsed = null;
+        try {
+          parsed = JSON.parse(String(reader.result));
+        } catch (e) {
+          parsed = null;
+        }
+
+        if (!isValidImportData(parsed)) {
+          window.alert(
+            "復元に失敗しました。選択したファイルはiKanbanのバックアップ形式として認識できません。\n" +
+            "現在のKanbanの内容は変更していません。"
+          );
+          return;
+        }
+
+        var confirmed = window.confirm(
+          "現在のKanbanの内容を、選択したファイルの内容で置き換えます。\n" +
+          "元に戻せるよう、現在の内容は復元前にこのブラウザ内へ退避されます。\n" +
+          "よろしいですか？"
+        );
+        if (!confirmed) {
+          return;
+        }
+
+        if (!snapshotBeforeRestore()) {
+          window.alert(
+            "復元前バックアップの退避に失敗したため、復元を中止しました。\n" +
+            "現在のKanbanの内容は変更していません。"
+          );
+          return;
+        }
+
+        applyImportedData(parsed);
+        window.alert("復元が完了しました。");
+      };
+
+      reader.onerror = function () {
+        window.alert("ファイルの読み込みに失敗しました。現在のKanbanの内容は変更していません。");
+      };
+
+      reader.readAsText(file);
+    }
+
+    function init(exportBtn, restoreBtn, fileInput) {
+      exportBtn.addEventListener("click", download);
+
+      restoreBtn.addEventListener("click", function () {
+        fileInput.click();
+      });
+
+      fileInput.addEventListener("change", function () {
+        var file = fileInput.files && fileInput.files[0];
+        fileInput.value = ""; // 同じファイルを選び直しても change が発火するようにする
+        if (!file) return;
+        restoreFromFile(file);
+      });
+    }
+
+    return { init: init };
+  })();
+
+  /* ============================================================
      初期化
      ============================================================ */
   document.addEventListener("DOMContentLoaded", function () {
     ThemeManager.init(document.getElementById("theme-select"));
     state = BoardStore.load();
+    columnLabels = ColumnLabels.load();
+    ColumnLabelEditor.renderAll();
     Renderer.renderAll();
     STATUSES.forEach(Renderer.renderAddCardArea);
     DragAndDrop.init(document.getElementById("board"));
     initResetButton(document.getElementById("reset-button"));
+    BackupRestore.init(
+      document.getElementById("export-button"),
+      document.getElementById("restore-button"),
+      document.getElementById("restore-file-input")
+    );
   });
 </script>
 
