@@ -600,11 +600,22 @@
   var ThemeManager = (function () {
     var STORAGE_KEY = "ikanban.theme.v1";
     var DEFAULT_THEME = "light";
+    var ALLOWED_THEMES = ["light", "dark", "blue"];
 
+    // 許可された3テーマ以外は初期値へフォールバックする。
+    // 保存値が壊れていた場合、data-theme に不明な値が入りどのCSSブロックにも
+    // 一致せず配色が変わらないままになる（＝切替が効かないように見える）ため、
+    // ここで必ず既知の値へ寄せておく。
+    function sanitizeTheme(theme) {
+      return ALLOWED_THEMES.indexOf(theme) !== -1 ? theme : DEFAULT_THEME;
+    }
+
+    // 画面への反映のみを行う。保存の成否に関わらず、選択した瞬間に必ず呼ばれる。
     function apply(theme) {
       document.documentElement.setAttribute("data-theme", theme);
     }
 
+    // 保存のみを行う。失敗してもその場の表示（apply）には影響させない。
     function save(theme) {
       try {
         window.localStorage.setItem(STORAGE_KEY, theme);
@@ -615,7 +626,8 @@
 
     function load() {
       try {
-        return window.localStorage.getItem(STORAGE_KEY) || DEFAULT_THEME;
+        var stored = window.localStorage.getItem(STORAGE_KEY);
+        return stored ? sanitizeTheme(stored) : DEFAULT_THEME;
       } catch (e) {
         return DEFAULT_THEME;
       }
@@ -627,7 +639,7 @@
       selectEl.value = theme;
 
       selectEl.addEventListener("change", function () {
-        var next = selectEl.value;
+        var next = sanitizeTheme(selectEl.value);
         apply(next);
         save(next);
       });
