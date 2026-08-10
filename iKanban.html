@@ -152,6 +152,15 @@
     border-color: var(--accent);
   }
 
+  .btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .btn:disabled:hover {
+    border-color: var(--border);
+  }
+
   .btn-primary {
     background: var(--accent);
     color: var(--accent-text);
@@ -486,13 +495,14 @@
 <header>
   <div>
     <h1>iKanban</h1>
-    <p class="subtitle">個人用の実用最小Kanban（v0.2.0）</p>
+    <p class="subtitle">個人用の実用最小Kanban（v0.2.1）</p>
   </div>
   <div class="header-controls">
     <div class="header-actions">
       <button type="button" class="btn" id="reset-button">初期状態にリセット</button>
       <button type="button" class="btn" id="export-button">バックアップ出力</button>
       <button type="button" class="btn" id="restore-button">バックアップ復元</button>
+      <button type="button" class="btn" id="undo-restore-button" disabled>直前の復元を取り消す</button>
       <input type="file" id="restore-file-input" class="visually-hidden" accept="application/json,.json">
     </div>
     <div class="theme-switcher">
@@ -667,11 +677,14 @@
       return recovered;
     }
 
+    // 保存に成功したかどうかを呼び出し側が判定できるよう真偽値を返す。
     function save(board) {
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
+        return true;
       } catch (e) {
         console.warn("iKanban: 保存に失敗しました。変更が次回起動時に反映されない可能性があります。", e);
+        return false;
       }
     }
 
@@ -713,11 +726,14 @@
     }
 
     // 保存のみを行う。失敗してもその場の表示（apply）には影響させない。
+    // 保存に成功したかどうかを呼び出し側が判定できるよう真偽値を返す。
     function save(theme) {
       try {
         window.localStorage.setItem(STORAGE_KEY, theme);
+        return true;
       } catch (e) {
         console.warn("iKanban: テーマの保存に失敗しました。", e);
+        return false;
       }
     }
 
@@ -743,15 +759,16 @@
       });
     }
 
-    // バックアップ復元時に外部からテーマを設定するための入口。
-    // 表示・保存・セレクトボックスの選択状態を一括で揃える。
+    // バックアップ復元・取り消し時に外部からテーマを設定するための入口。
+    // 表示・保存・セレクトボックスの選択状態を一括で揃え、保存の成否を返す。
     function setAndPersist(theme) {
       var next = sanitizeTheme(theme);
       apply(next);
-      save(next);
+      var saved = save(next);
       if (selectEl) {
         selectEl.value = next;
       }
+      return saved;
     }
 
     function getCurrent() {
@@ -809,11 +826,14 @@
       }
     }
 
+    // 保存に成功したかどうかを呼び出し側が判定できるよう真偽値を返す。
     function save(labels) {
       try {
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(labels));
+        return true;
       } catch (e) {
         console.warn("iKanban: 列表示名の保存に失敗しました。", e);
+        return false;
       }
     }
 
@@ -1336,12 +1356,18 @@
   }
 
   /* ============================================================
-     バックアップ出力・復元
+     バックアップ出力・復元・直前の復元の取り消し
      ============================================================ */
   var BackupRestore = (function () {
     var APP_NAME = "iKanban";
     var CURRENT_FORMAT_VERSION = 1;
     var SUPPORTED_FORMAT_VERSIONS = [1];
+
+    // 復元前の状態を退避しておくキー。復元を実行するたびにこのキー1つを
+    // 上書きする（＝直前1世代分のみ保持。世代管理は行わない）。
+    var BEFORE_RESTORE_KEY = "ikanban.beforeRestore.v1";
+
+    var undoBtnEl = null;
 
     function pad2(n) {
       return n < 10 ? "0" + n : String(n);
@@ -1379,8 +1405,9 @@
       URL.revokeObjectURL(url);
     }
 
-    // 復元データとして妥当かを検証する。検証ロジックは各モジュールが
-    // 持つものをそのまま再利用し、ここでは重複させない。
+    // 復元データ（およびlocalStorageへ退避した「直前の復元前状態」）として
+    // 妥当かを検証する。検証ロジックは各モジュールが持つものをそのまま
+    // 再利用し、ここでは重複させない。
     function isValidImportData(data) {
       if (!data || typeof data !== "object") {
         return false;
@@ -1403,12 +1430,9 @@
       return true;
     }
 
-    // 復元直前の状態を退避する。失敗した場合は呼び出し側で復元処理そのものを
-    // 中止させ、「復元で現在データを不可逆に失う」ことがないようにする。
-    function snapshotBeforeRestore() {
+    function saveBeforeRestoreSnapshot(snapshot) {
       try {
-        var key = "ikanban.board.v1.before-restore." + Date.now();
-        window.localStorage.setItem(key, JSON.stringify(buildExportData()));
+        window.localStorage.setItem(BEFORE_RESTORE_KEY, JSON.stringify(snapshot));
         return true;
       } catch (e) {
         console.warn("iKanban: 復元前バックアップの退避に失敗しました。", e);
@@ -1416,17 +1440,84 @@
       }
     }
 
-    function applyImportedData(data) {
-      state = { cards: data.board.cards, columns: data.board.columns };
-      columnLabels = ColumnLabels.sanitize(data.columnLabels);
+    // 取り消し可能な「直前の復元前状態」を読み込む。存在しない、または
+    // 壊れている場合はnullを返す（取り消し不可として扱う）。
+    function loadBeforeRestoreSnapshot() {
+      try {
+        var raw = window.localStorage.getItem(BEFORE_RESTORE_KEY);
+        if (!raw) {
+          return null;
+        }
+        var parsed = JSON.parse(raw);
+        return isValidImportData(parsed) ? parsed : null;
+      } catch (e) {
+        return null;
+      }
+    }
 
-      BoardStore.save(state);
-      ColumnLabels.save(columnLabels);
-      ThemeManager.setAndPersist(data.theme);
+    function clearBeforeRestoreSnapshot() {
+      try {
+        window.localStorage.removeItem(BEFORE_RESTORE_KEY);
+      } catch (e) {
+        // 削除に失敗しても実害は小さいため無視する（次回の復元で上書きされる）
+      }
+    }
 
+    function updateUndoButtonState() {
+      if (undoBtnEl) {
+        undoBtnEl.disabled = loadBeforeRestoreSnapshot() === null;
+      }
+    }
+
+    // カード・件数・列表示名・カード追加領域を現在のstate/columnLabelsへ
+    // 揃える。既存のRenderer/ColumnLabelEditorの描画処理をそのまま使い、
+    // 復元専用の描画ロジックは増やさない。
+    function refreshBoardUI() {
       Renderer.renderAll();
       STATUSES.forEach(Renderer.renderAddCardArea);
       ColumnLabelEditor.renderAll();
+    }
+
+    // data（board/columnLabels/theme）を反映・保存する。保存が一部でも
+    // 失敗した場合、rollbackTo が指定されていればその内容へ戻したうえで
+    // 保存し直す（「一部だけ保存されたが成功扱い」という不整合を避けるため）。
+    // rollbackTo が無い場合（取り消し操作自体の失敗時など、戻す先がない場合）
+    // は反映結果をそのまま残し、保存できなかった旨だけを伝える。
+    // 戻り値は保存が全て成功したかどうか。
+    function applyAndPersist(data, rollbackTo, actionLabel) {
+      state = { cards: data.board.cards, columns: data.board.columns };
+      columnLabels = ColumnLabels.sanitize(data.columnLabels);
+
+      var boardSaved = BoardStore.save(state);
+      var labelsSaved = ColumnLabels.save(columnLabels);
+      var themeSaved = ThemeManager.setAndPersist(data.theme);
+      var allSaved = boardSaved && labelsSaved && themeSaved;
+
+      if (!allSaved && rollbackTo) {
+        state = { cards: rollbackTo.board.cards, columns: rollbackTo.board.columns };
+        columnLabels = ColumnLabels.sanitize(rollbackTo.columnLabels);
+        BoardStore.save(state);
+        ColumnLabels.save(columnLabels);
+        ThemeManager.setAndPersist(rollbackTo.theme);
+      }
+
+      refreshBoardUI();
+
+      if (allSaved) {
+        window.alert(actionLabel + "が完了しました。");
+      } else if (rollbackTo) {
+        window.alert(
+          actionLabel + "内容の保存に失敗したため、" + actionLabel + "を中止し、" + actionLabel + "前の内容へ戻しました。\n" +
+          "ブラウザの保存容量などをご確認のうえ、もう一度お試しください。"
+        );
+      } else {
+        window.alert(
+          actionLabel + "後の内容を保存できませんでした。表示は" + actionLabel + "後の内容になっていますが、\n" +
+          "再読み込みすると保存できなかった項目が元に戻る可能性があります。もう一度お試しください。"
+        );
+      }
+
+      return allSaved;
     }
 
     function restoreFromFile(file) {
@@ -1450,14 +1541,16 @@
 
         var confirmed = window.confirm(
           "現在のKanbanの内容を、選択したファイルの内容で置き換えます。\n" +
-          "元に戻せるよう、現在の内容は復元前にこのブラウザ内へ退避されます。\n" +
+          "元に戻せるよう、現在の内容は復元前にこのブラウザ内へ退避されます（直前1回分のみ）。\n" +
           "よろしいですか？"
         );
         if (!confirmed) {
           return;
         }
 
-        if (!snapshotBeforeRestore()) {
+        var previousSnapshot = buildExportData();
+
+        if (!saveBeforeRestoreSnapshot(previousSnapshot)) {
           window.alert(
             "復元前バックアップの退避に失敗したため、復元を中止しました。\n" +
             "現在のKanbanの内容は変更していません。"
@@ -1465,8 +1558,8 @@
           return;
         }
 
-        applyImportedData(parsed);
-        window.alert("復元が完了しました。");
+        applyAndPersist(parsed, previousSnapshot, "復元");
+        updateUndoButtonState();
       };
 
       reader.onerror = function () {
@@ -1476,7 +1569,34 @@
       reader.readAsText(file);
     }
 
-    function init(exportBtn, restoreBtn, fileInput) {
+    function undoLastRestore() {
+      var snapshot = loadBeforeRestoreSnapshot();
+      if (!snapshot) {
+        window.alert("取り消せる復元はありません。");
+        updateUndoButtonState();
+        return;
+      }
+
+      var confirmed = window.confirm(
+        "直前の「バックアップ復元」を取り消し、復元前の内容へ戻します。\n" +
+        "取り消せるのはこの1回分のみです。よろしいですか？"
+      );
+      if (!confirmed) {
+        return;
+      }
+
+      // 取り消し自体が「安全な状態への復帰」なので、これ以上戻す先はない
+      var succeeded = applyAndPersist(snapshot, null, "取り消し");
+      if (succeeded) {
+        // 取り消しは直前1回分のみを対象とするため、使った退避データは消費する
+        clearBeforeRestoreSnapshot();
+      }
+      updateUndoButtonState();
+    }
+
+    function init(exportBtn, restoreBtn, fileInput, undoBtn) {
+      undoBtnEl = undoBtn;
+
       exportBtn.addEventListener("click", download);
 
       restoreBtn.addEventListener("click", function () {
@@ -1489,6 +1609,10 @@
         if (!file) return;
         restoreFromFile(file);
       });
+
+      undoBtn.addEventListener("click", undoLastRestore);
+
+      updateUndoButtonState();
     }
 
     return { init: init };
@@ -1509,7 +1633,8 @@
     BackupRestore.init(
       document.getElementById("export-button"),
       document.getElementById("restore-button"),
-      document.getElementById("restore-file-input")
+      document.getElementById("restore-file-input"),
+      document.getElementById("undo-restore-button")
     );
   });
 </script>
