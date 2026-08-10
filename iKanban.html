@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="ja" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iKanban</title>
+<style>
+  /* ============================================================
+     テーマ変数定義（iKanbanPilot.html と同じ考え方）
+     - :root が既定（Light）テーマ
+     - html[data-theme="xxx"] で各テーマの値を上書きする
+     - レイアウトはテーマ間で共通。配色・境界線・影のみ変化させる
+     ============================================================ */
+  :root {
+    --bg: #f4f5f7;
+    --surface: #ffffff;
+    --surface-alt: #eceef1;
+    --text: #1b1f24;
+    --text-muted: #5b6470;
+    --border: #d0d5dc;
+    --accent: #2f6fed;
+    --accent-text: #ffffff;
+    --danger: #b3261e;
+    --shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+    --dragging-opacity: 0.5;
+    --dropzone-bg: #e6edff;
+    --insert-line: #2f6fed;
+  }
+
+  html[data-theme="dark"] {
+    --bg: #14161a;
+    --surface: #1f232a;
+    --surface-alt: #262b33;
+    --text: #eef1f5;
+    --text-muted: #9aa3b0;
+    --border: #363c46;
+    --accent: #6d9bff;
+    --accent-text: #10131a;
+    --danger: #ff8a80;
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --dropzone-bg: #2a3550;
+    --insert-line: #6d9bff;
+  }
+
+  html[data-theme="blue"] {
+    --bg: #eaf2fb;
+    --surface: #ffffff;
+    --surface-alt: #dbe9fb;
+    --text: #102540;
+    --text-muted: #4a6483;
+    --border: #b7d2f0;
+    --accent: #0b5fcc;
+    --accent-text: #ffffff;
+    --danger: #a3271a;
+    --shadow: 0 1px 2px rgba(11, 95, 204, 0.15);
+    --dropzone-bg: #cfe3fb;
+    --insert-line: #0b5fcc;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+    line-height: 1.5;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  header h1 {
+    font-size: 18px;
+    margin: 0;
+  }
+
+  header p.subtitle {
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+
+  .header-controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .theme-switcher {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .theme-switcher label {
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .theme-switcher select {
+    font-size: 14px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  button {
+    font-family: inherit;
+  }
+
+  .btn {
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: var(--accent-text);
+    border-color: var(--accent);
+  }
+
+  .btn:focus-visible,
+  select:focus-visible,
+  input:focus-visible,
+  textarea:focus-visible,
+  .card:focus-visible,
+  .card-title-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  main {
+    padding: 20px;
+    overflow-x: auto;
+  }
+
+  .board {
+    display: flex;
+    gap: 16px;
+    min-width: 960px;
+  }
+
+  .column {
+    flex: 1 1 0;
+    min-width: 240px;
+    background: var(--surface-alt);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    min-height: 60vh;
+  }
+
+  .column-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 4px 4px 12px;
+    border-bottom: 2px solid var(--border);
+    margin-bottom: 10px;
+  }
+
+  .column-header h2 {
+    font-size: 14px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .column-count {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 9px;
+    min-width: 22px;
+    text-align: center;
+  }
+
+  .card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-height: 60px;
+    border-radius: 8px;
+    padding: 4px;
+    transition: background-color 0.12s ease;
+  }
+
+  /* ドロップ可能であることを示す状態。色だけに頼らず点線枠も併用する */
+  .card-list.dropzone-active {
+    background: var(--dropzone-bg);
+    outline: 2px dashed var(--accent);
+    outline-offset: -2px;
+  }
+
+  .card {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 30px 10px 12px;
+    box-shadow: var(--shadow);
+    cursor: grab;
+  }
+
+  .card.dragging {
+    opacity: var(--dragging-opacity);
+    border-style: dashed;
+  }
+
+  /* ドラッグ中に挿入位置を示す境界線（色だけに依存しないよう太さも変える） */
+  .card.insert-before {
+    border-top: 3px solid var(--insert-line);
+  }
+
+  .card.insert-after {
+    border-bottom: 3px solid var(--insert-line);
+  }
+
+  .card-title-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    padding: 0;
+    margin: 0 0 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  .card-note {
+    font-size: 12px;
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .card-delete {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 22px;
+    height: 22px;
+    line-height: 1;
+    padding: 0;
+    border-radius: 5px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 15px;
+    cursor: pointer;
+  }
+
+  .card-delete:hover,
+  .card-delete:focus-visible {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: var(--surface-alt);
+  }
+
+  .card-edit-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .card-edit-form input,
+  .card-edit-form textarea {
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    resize: vertical;
+  }
+
+  .card-edit-form textarea {
+    min-height: 48px;
+  }
+
+  .card-edit-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  .add-card-area {
+    margin-top: 8px;
+  }
+
+  .add-card-trigger {
+    width: 100%;
+    text-align: left;
+    font-size: 13px;
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1px dashed var(--border);
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .add-card-trigger:hover {
+    color: var(--text);
+    border-color: var(--accent);
+  }
+
+  .add-card-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+  }
+
+  .add-card-form label {
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+
+  .add-card-form input,
+  .add-card-form textarea {
+    font-family: inherit;
+    font-size: 13px;
+    padding: 6px 8px;
+    border-radius: 5px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    resize: vertical;
+  }
+
+  .add-card-form textarea {
+    min-height: 42px;
+  }
+
+  .add-card-actions {
+    display: flex;
+    gap: 6px;
+    justify-content: flex-end;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  footer {
+    padding: 12px 24px 24px;
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>iKanban</h1>
+    <p class="subtitle">個人用の実用最小Kanban（v0.1.0）</p>
+  </div>
+  <div class="header-controls">
+    <button type="button" class="btn" id="reset-button">初期状態にリセット</button>
+    <div class="theme-switcher">
+      <label for="theme-select">テーマ</label>
+      <select id="theme-select">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+        <option value="blue">Blue</option>
+      </select>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="board" id="board">
+    <section class="column" data-status="todo">
+      <div class="column-header">
+        <h2>未着手</h2>
+        <span class="column-count" data-count-for="todo">0</span>
+      </div>
+      <div class="card-list" data-status="todo"></div>
+      <div class="add-card-area" data-status="todo"></div>
+    </section>
+
+    <section class="column" data-status="doing">
+      <div class="column-header">
+        <h2>作業中</h2>
+        <span class="column-count" data-count-for="doing">0</span>
+      </div>
+      <div class="card-list" data-status="doing"></div>
+      <div class="add-card-area" data-status="doing"></div>
+    </section>
+
+    <section class="column" data-status="review">
+      <div class="column-header">
+        <h2>確認待ち</h2>
+        <span class="column-count" data-count-for="review">0</span>
+      </div>
+      <div class="card-list" data-status="review"></div>
+      <div class="add-card-area" data-status="review"></div>
+    </section>
+
+    <section class="column" data-status="done">
+      <div class="column-header">
+        <h2>完了</h2>
+        <span class="column-count" data-count-for="done">0</span>
+      </div>
+      <div class="card-list" data-status="done"></div>
+      <div class="add-card-area" data-status="done"></div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  iKanban &mdash; カードとテーマ設定はこのブラウザの localStorage に保存されます。ブラウザのデータを削除すると内容も失われます。
+</footer>
+
+<script>
+  "use strict";
+
+  var STATUSES = ["todo", "doing", "review", "done"];
+
+  /* ============================================================
+     ID生成
+     ============================================================ */
+  function generateId() {
+    if (window.crypto && typeof window.crypto.randomUUID === "function") {
+      return window.crypto.randomUUID();
+    }
+    return "card-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+  }
+
+  /* ============================================================
+     初期サンプルデータ（初回起動時のみ使用）
+     ============================================================ */
+  function buildInitialBoard() {
+    var cards = {};
+    var columns = { todo: [], doing: [], review: [], done: [] };
+
+    var sample = [
+      { title: "申請フォームを整理する", note: "旧フォームの項目を洗い出す", status: "todo" },
+      { title: "初期要件を整理する", note: "関係者へヒアリングした内容をまとめる", status: "todo" },
+      { title: "マニュアルを更新する", note: "画面変更に合わせて手順を修正", status: "doing" },
+      { title: "画面デザインを確認する", note: "配色とレイアウトのレビュー", status: "doing" },
+      { title: "テスト結果をレビューする", note: "不具合の有無を確認", status: "review" },
+      { title: "議事録を配布する", note: "前回MTGの内容を共有済み", status: "done" }
+    ];
+
+    sample.forEach(function (item) {
+      var id = generateId();
+      cards[id] = { title: item.title, note: item.note };
+      columns[item.status].push(id);
+    });
+
+    return { cards: cards, columns: columns };
+  }
+
+  /* ============================================================
+     データ保存・読込（カードとカード配置のみを対象とする）
+     ============================================================ */
+  var BoardStore = (function () {
+    var STORAGE_KEY = "ikanban.board.v1";
+
+    function load() {
+      try {
+        var raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+          var initial = buildInitialBoard();
+          save(initial);
+          return initial;
+        }
+        var parsed = JSON.parse(raw);
+        if (!parsed || !parsed.cards || !parsed.columns) {
+          throw new Error("invalid board data");
+        }
+        return parsed;
+      } catch (e) {
+        var fallback = buildInitialBoard();
+        save(fallback);
+        return fallback;
+      }
+    }
+
+    function save(board) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
+      } catch (e) {
+        // localStorageが使用できない環境では保存をあきらめる
+      }
+    }
+
+    function reset() {
+      var initial = buildInitialBoard();
+      save(initial);
+      return initial;
+    }
+
+    return { load: load, save: save, reset: reset };
+  })();
+
+  /* ============================================================
+     テーマ管理（保存先はBoardStoreと分離する）
+     ============================================================ */
+  var ThemeManager = (function () {
+    var STORAGE_KEY = "ikanban.theme.v1";
+    var DEFAULT_THEME = "light";
+
+    function apply(theme) {
+      document.documentElement.setAttribute("data-theme", theme);
+    }
+
+    function save(theme) {
+      try {
+        window.localStorage.setItem(STORAGE_KEY, theme);
+      } catch (e) {
+        // 保存できない環境では諦める
+      }
+    }
+
+    function load() {
+      try {
+        return window.localStorage.getItem(STORAGE_KEY) || DEFAULT_THEME;
+      } catch (e) {
+        return DEFAULT_THEME;
+      }
+    }
+
+    function init(selectEl) {
+      var theme = load();
+      apply(theme);
+      selectEl.value = theme;
+
+      selectEl.addEventListener("change", function () {
+        var next = selectEl.value;
+        apply(next);
+        save(next);
+      });
+    }
+
+    return { init: init };
+  })();
+
+  /* ============================================================
+     アプリ状態（メモリ上の現在値。BoardStoreの内容を保持する）
+     ============================================================ */
+  var state = null;
+
+  function persist() {
+    BoardStore.save(state);
+  }
+
+  /* ============================================================
+     件数更新
+     ============================================================ */
+  var CountUpdater = (function () {
+    function updateAll() {
+      STATUSES.forEach(function (status) {
+        var count = state.columns[status].length;
+        var badge = document.querySelector('[data-count-for="' + status + '"]');
+        if (badge) {
+          badge.textContent = String(count);
+        }
+      });
+    }
+    return { updateAll: updateAll };
+  })();
+
+  /* ============================================================
+     カード操作（追加・編集・削除）
+     ============================================================ */
+  var CardActions = (function () {
+    function addCard(status, title, note) {
+      var trimmedTitle = title.trim();
+      if (!trimmedTitle) {
+        return;
+      }
+      var id = generateId();
+      state.cards[id] = { title: trimmedTitle, note: note.trim() };
+      state.columns[status].push(id);
+      persist();
+      Renderer.renderAll();
+    }
+
+    function editCard(id, title, note) {
+      var trimmedTitle = title.trim();
+      if (!trimmedTitle) {
+        return false;
+      }
+      state.cards[id] = { title: trimmedTitle, note: note.trim() };
+      persist();
+      Renderer.renderAll();
+      return true;
+    }
+
+    function deleteCard(id) {
+      delete state.cards[id];
+      STATUSES.forEach(function (status) {
+        var list = state.columns[status];
+        var index = list.indexOf(id);
+        if (index !== -1) {
+          list.splice(index, 1);
+        }
+      });
+      persist();
+      Renderer.renderAll();
+    }
+
+    return { addCard: addCard, editCard: editCard, deleteCard: deleteCard };
+  })();
+
+  /* ============================================================
+     描画
+     ============================================================ */
+  var Renderer = (function () {
+    function renderAll() {
+      STATUSES.forEach(renderColumn);
+      CountUpdater.updateAll();
+    }
+
+    function renderColumn(status) {
+      var list = document.querySelector('.card-list[data-status="' + status + '"]');
+      list.innerHTML = "";
+      state.columns[status].forEach(function (id) {
+        var card = state.cards[id];
+        if (card) {
+          list.appendChild(buildCardElement(id, card, status));
+        }
+      });
+      renderAddCardArea(status);
+    }
+
+    function buildCardElement(id, card, status) {
+      var el = document.createElement("div");
+      el.className = "card";
+      el.draggable = true;
+      el.id = id;
+      el.setAttribute("data-status", status);
+      renderCardDisplay(el, id, card);
+      return el;
+    }
+
+    function renderCardDisplay(el, id, card) {
+      el.innerHTML = "";
+
+      var titleBtn = document.createElement("button");
+      titleBtn.type = "button";
+      titleBtn.className = "card-title-btn";
+      titleBtn.textContent = card.title;
+      titleBtn.setAttribute("aria-label", "カードを編集: " + card.title);
+      titleBtn.addEventListener("click", function () {
+        renderCardEditForm(el, id, card);
+      });
+      el.appendChild(titleBtn);
+
+      if (card.note) {
+        var note = document.createElement("p");
+        note.className = "card-note";
+        note.textContent = card.note;
+        el.appendChild(note);
+      }
+
+      var deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "card-delete";
+      deleteBtn.setAttribute("aria-label", "このカードを削除: " + card.title);
+      deleteBtn.textContent = "×";
+      deleteBtn.addEventListener("click", function (event) {
+        event.stopPropagation();
+        if (window.confirm("このカードを削除しますか？\n「" + card.title + "」")) {
+          CardActions.deleteCard(id);
+        }
+      });
+      el.appendChild(deleteBtn);
+    }
+
+    function renderCardEditForm(el, id, card) {
+      el.innerHTML = "";
+      el.draggable = false;
+
+      var form = document.createElement("form");
+      form.className = "card-edit-form";
+
+      var titleLabel = document.createElement("label");
+      titleLabel.className = "visually-hidden";
+      titleLabel.setAttribute("for", "edit-title-" + id);
+      titleLabel.textContent = "タイトル";
+
+      var titleInput = document.createElement("input");
+      titleInput.type = "text";
+      titleInput.id = "edit-title-" + id;
+      titleInput.value = card.title;
+      titleInput.required = true;
+
+      var noteLabel = document.createElement("label");
+      noteLabel.className = "visually-hidden";
+      noteLabel.setAttribute("for", "edit-note-" + id);
+      noteLabel.textContent = "補足";
+
+      var noteInput = document.createElement("textarea");
+      noteInput.id = "edit-note-" + id;
+      noteInput.value = card.note || "";
+
+      var actions = document.createElement("div");
+      actions.className = "card-edit-actions";
+
+      var cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "btn";
+      cancelBtn.textContent = "キャンセル";
+      cancelBtn.addEventListener("click", function () {
+        el.draggable = true;
+        renderCardDisplay(el, id, card);
+      });
+
+      var saveBtn = document.createElement("button");
+      saveBtn.type = "submit";
+      saveBtn.className = "btn btn-primary";
+      saveBtn.textContent = "保存";
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        CardActions.editCard(id, titleInput.value, noteInput.value);
+      });
+
+      actions.appendChild(cancelBtn);
+      actions.appendChild(saveBtn);
+      form.appendChild(titleLabel);
+      form.appendChild(titleInput);
+      form.appendChild(noteLabel);
+      form.appendChild(noteInput);
+      form.appendChild(actions);
+      el.appendChild(form);
+
+      titleInput.focus();
+    }
+
+    function renderAddCardArea(status) {
+      var area = document.querySelector('.add-card-area[data-status="' + status + '"]');
+      area.innerHTML = "";
+
+      var trigger = document.createElement("button");
+      trigger.type = "button";
+      trigger.className = "add-card-trigger";
+      trigger.textContent = "+ カードを追加";
+      trigger.addEventListener("click", function () {
+        renderAddCardForm(area, status);
+      });
+      area.appendChild(trigger);
+    }
+
+    function renderAddCardForm(area, status) {
+      area.innerHTML = "";
+
+      var form = document.createElement("form");
+      form.className = "add-card-form";
+
+      var titleLabel = document.createElement("label");
+      titleLabel.setAttribute("for", "new-title-" + status);
+      titleLabel.textContent = "タイトル（必須）";
+
+      var titleInput = document.createElement("input");
+      titleInput.type = "text";
+      titleInput.id = "new-title-" + status;
+      titleInput.required = true;
+
+      var noteLabel = document.createElement("label");
+      noteLabel.setAttribute("for", "new-note-" + status);
+      noteLabel.textContent = "補足";
+
+      var noteInput = document.createElement("textarea");
+      noteInput.id = "new-note-" + status;
+
+      var actions = document.createElement("div");
+      actions.className = "add-card-actions";
+
+      var cancelBtn = document.createElement("button");
+      cancelBtn.type = "button";
+      cancelBtn.className = "btn";
+      cancelBtn.textContent = "閉じる";
+      cancelBtn.addEventListener("click", function () {
+        renderAddCardArea(status);
+      });
+
+      var addBtn = document.createElement("button");
+      addBtn.type = "submit";
+      addBtn.className = "btn btn-primary";
+      addBtn.textContent = "追加";
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        if (!titleInput.value.trim()) {
+          titleInput.focus();
+          return;
+        }
+        CardActions.addCard(status, titleInput.value, noteInput.value);
+      });
+
+      actions.appendChild(cancelBtn);
+      actions.appendChild(addBtn);
+      form.appendChild(titleLabel);
+      form.appendChild(titleInput);
+      form.appendChild(noteLabel);
+      form.appendChild(noteInput);
+      form.appendChild(actions);
+      area.appendChild(form);
+
+      titleInput.focus();
+    }
+
+    return { renderAll: renderAll };
+  })();
+
+  /* ============================================================
+     ドラッグ＆ドロップ（列間移動＋同一列内の並び替え）
+     ============================================================ */
+  var DragAndDrop = (function () {
+    var draggedId = null;
+
+    function clearInsertMarkers() {
+      document.querySelectorAll(".card.insert-before, .card.insert-after").forEach(function (el) {
+        el.classList.remove("insert-before", "insert-after");
+      });
+    }
+
+    function clearDropzones() {
+      document.querySelectorAll(".card-list.dropzone-active").forEach(function (el) {
+        el.classList.remove("dropzone-active");
+      });
+    }
+
+    function handleDragStart(event) {
+      var card = event.target.closest(".card");
+      if (!card) return;
+      draggedId = card.id;
+      card.classList.add("dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", card.id);
+    }
+
+    function handleDragEnd(event) {
+      var card = event.target.closest(".card");
+      if (card) {
+        card.classList.remove("dragging");
+      }
+      draggedId = null;
+      clearInsertMarkers();
+      clearDropzones();
+    }
+
+    function handleDragOver(event) {
+      var list = event.target.closest(".card-list");
+      if (!list || !draggedId) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      list.classList.add("dropzone-active");
+
+      clearInsertMarkers();
+      var targetCard = event.target.closest(".card");
+      if (targetCard && targetCard.id !== draggedId && list.contains(targetCard)) {
+        var rect = targetCard.getBoundingClientRect();
+        var isBefore = event.clientY < rect.top + rect.height / 2;
+        targetCard.classList.add(isBefore ? "insert-before" : "insert-after");
+      }
+    }
+
+    function handleDragLeave(event) {
+      var list = event.target.closest(".card-list");
+      if (!list) return;
+      if (!list.contains(event.relatedTarget)) {
+        list.classList.remove("dropzone-active");
+      }
+    }
+
+    function handleDrop(event) {
+      var list = event.target.closest(".card-list");
+      if (!list || !draggedId) return;
+      event.preventDefault();
+
+      var newStatus = list.getAttribute("data-status");
+      var targetCard = event.target.closest(".card");
+      var insertIndex = state.columns[newStatus].length;
+
+      if (targetCard && targetCard.id !== draggedId && list.contains(targetCard)) {
+        var rect = targetCard.getBoundingClientRect();
+        var isBefore = event.clientY < rect.top + rect.height / 2;
+        var targetIndex = state.columns[newStatus].indexOf(targetCard.id);
+        insertIndex = isBefore ? targetIndex : targetIndex + 1;
+      }
+
+      moveCard(draggedId, newStatus, insertIndex);
+
+      clearInsertMarkers();
+      clearDropzones();
+    }
+
+    function moveCard(id, newStatus, insertIndex) {
+      var oldStatus = null;
+      STATUSES.forEach(function (status) {
+        var index = state.columns[status].indexOf(id);
+        if (index !== -1) {
+          oldStatus = status;
+          state.columns[status].splice(index, 1);
+          if (status === newStatus && index < insertIndex) {
+            insertIndex -= 1;
+          }
+        }
+      });
+      if (oldStatus === null) return;
+
+      var target = state.columns[newStatus];
+      insertIndex = Math.max(0, Math.min(insertIndex, target.length));
+      target.splice(insertIndex, 0, id);
+
+      persist();
+      Renderer.renderAll();
+    }
+
+    function init(boardEl) {
+      boardEl.addEventListener("dragstart", handleDragStart);
+      boardEl.addEventListener("dragend", handleDragEnd);
+      boardEl.addEventListener("dragover", handleDragOver);
+      boardEl.addEventListener("dragleave", handleDragLeave);
+      boardEl.addEventListener("drop", handleDrop);
+    }
+
+    return { init: init };
+  })();
+
+  /* ============================================================
+     リセット
+     ============================================================ */
+  function initResetButton(buttonEl) {
+    buttonEl.addEventListener("click", function () {
+      var confirmed = window.confirm(
+        "Kanbanの内容を初期状態に戻します。追加・編集・削除・並び替えの内容は失われます。よろしいですか？"
+      );
+      if (!confirmed) return;
+      state = BoardStore.reset();
+      Renderer.renderAll();
+    });
+  }
+
+  /* ============================================================
+     初期化
+     ============================================================ */
+  document.addEventListener("DOMContentLoaded", function () {
+    ThemeManager.init(document.getElementById("theme-select"));
+    state = BoardStore.load();
+    Renderer.renderAll();
+    DragAndDrop.init(document.getElementById("board"));
+    initResetButton(document.getElementById("reset-button"));
+  });
+</script>
+
+</body>
+</html>
