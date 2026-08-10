@@ -240,13 +240,15 @@
     border-style: dashed;
   }
 
-  /* ドラッグ中に挿入位置を示す境界線（色だけに依存しないよう太さも変える） */
+  /* ドラッグ中に挿入位置を示す線。
+     border で描くとカードの高さが変わり、境界付近でカードが上下に動いて
+     ちらつくため、レイアウトに影響しない内側の影で描画する */
   .card.insert-before {
-    border-top: 3px solid var(--insert-line);
+    box-shadow: var(--shadow), inset 0 3px 0 0 var(--insert-line);
   }
 
   .card.insert-after {
-    border-bottom: 3px solid var(--insert-line);
+    box-shadow: var(--shadow), inset 0 -3px 0 0 var(--insert-line);
   }
 
   .card-title-btn {
@@ -658,35 +660,20 @@
   }
 
   /* ============================================================
-     件数更新
-     ============================================================ */
-  var CountUpdater = (function () {
-    function updateAll() {
-      STATUSES.forEach(function (status) {
-        var count = state.columns[status].length;
-        var badge = document.querySelector('[data-count-for="' + status + '"]');
-        if (badge) {
-          badge.textContent = String(count);
-        }
-      });
-    }
-    return { updateAll: updateAll };
-  })();
-
-  /* ============================================================
      カード操作（追加・編集・削除）
      ============================================================ */
   var CardActions = (function () {
     function addCard(status, title, note) {
       var trimmedTitle = title.trim();
       if (!trimmedTitle) {
-        return;
+        return false;
       }
       var id = generateId();
       state.cards[id] = { title: trimmedTitle, note: note.trim() };
       state.columns[status].push(id);
       persist();
       Renderer.renderAll();
+      return true;
     }
 
     function editCard(id, title, note) {
@@ -721,20 +708,27 @@
      ============================================================ */
   var Renderer = (function () {
     function renderAll() {
-      STATUSES.forEach(renderColumn);
-      CountUpdater.updateAll();
+      STATUSES.forEach(function (status) {
+        renderColumn(status);
+      });
     }
 
+    // カードの再描画と件数表示は必ずセットで行う。
+    // 件数は実際に描画したカード数から数えるため、画面と食い違うことがない。
     function renderColumn(status) {
       var list = document.querySelector('.card-list[data-status="' + status + '"]');
       list.innerHTML = "";
+
+      var count = 0;
       state.columns[status].forEach(function (id) {
         var card = state.cards[id];
         if (card) {
           list.appendChild(buildCardElement(id, card, status));
+          count += 1;
         }
       });
-      renderAddCardArea(status);
+
+      document.querySelector('[data-count-for="' + status + '"]').textContent = String(count);
     }
 
     function buildCardElement(id, card, status) {
@@ -842,6 +836,9 @@
       titleInput.focus();
     }
 
+    // 「+ カードを追加」の領域はカードの内容に依存しないため、
+    // カードの再描画では作り直さない。入力途中のフォームが
+    // 他の操作（別カードの追加・移動など）で消えるのを防ぐ。
     function renderAddCardArea(status) {
       var area = document.querySelector('.add-card-area[data-status="' + status + '"]');
       area.innerHTML = "";
@@ -894,13 +891,14 @@
       addBtn.className = "btn btn-primary";
       addBtn.textContent = "追加";
 
+      // 追加後もフォームを開いたままにし、続けて入力できるようにする
       form.addEventListener("submit", function (event) {
         event.preventDefault();
-        if (!titleInput.value.trim()) {
-          titleInput.focus();
-          return;
+        if (CardActions.addCard(status, titleInput.value, noteInput.value)) {
+          titleInput.value = "";
+          noteInput.value = "";
         }
-        CardActions.addCard(status, titleInput.value, noteInput.value);
+        titleInput.focus();
       });
 
       actions.appendChild(cancelBtn);
@@ -915,7 +913,7 @@
       titleInput.focus();
     }
 
-    return { renderAll: renderAll };
+    return { renderAll: renderAll, renderAddCardArea: renderAddCardArea };
   })();
 
   /* ============================================================
@@ -936,9 +934,40 @@
       });
     }
 
+    // リスト内のカードを上から見て、ポインタのY座標が入る位置を返す（0〜カード数）。
+    // 表示順とstate.columnsの並び順は一致しているため、この値をそのまま
+    // 挿入位置として使える。カードの隙間や余白にドロップされた場合も、
+    // 見た目どおりの位置になる。
+    function getInsertIndex(list, clientY) {
+      var cards = list.querySelectorAll(".card");
+      for (var i = 0; i < cards.length; i++) {
+        var rect = cards[i].getBoundingClientRect();
+        if (clientY < rect.top + rect.height / 2) {
+          return i;
+        }
+      }
+      return cards.length;
+    }
+
+    // 挿入位置を示す線を、対象のカードの上辺または下辺に表示する
+    function showInsertMarker(list, insertIndex) {
+      clearInsertMarkers();
+      var cards = list.querySelectorAll(".card");
+      if (cards.length === 0) return;
+
+      if (insertIndex < cards.length) {
+        cards[insertIndex].classList.add("insert-before");
+      } else {
+        cards[cards.length - 1].classList.add("insert-after");
+      }
+    }
+
     function handleDragStart(event) {
       var card = event.target.closest(".card");
-      if (!card) return;
+      // 編集フォームを開いているカード（draggable=false）は対象外。
+      // 入力欄の文字列を選択してドラッグした場合に、カードごと
+      // 移動してしまい編集内容が失われるのを防ぐ。
+      if (!card || !card.draggable) return;
       draggedId = card.id;
       card.classList.add("dragging");
       event.dataTransfer.effectAllowed = "move";
@@ -962,13 +991,7 @@
       event.dataTransfer.dropEffect = "move";
       list.classList.add("dropzone-active");
 
-      clearInsertMarkers();
-      var targetCard = event.target.closest(".card");
-      if (targetCard && targetCard.id !== draggedId && list.contains(targetCard)) {
-        var rect = targetCard.getBoundingClientRect();
-        var isBefore = event.clientY < rect.top + rect.height / 2;
-        targetCard.classList.add(isBefore ? "insert-before" : "insert-after");
-      }
+      showInsertMarker(list, getInsertIndex(list, event.clientY));
     }
 
     function handleDragLeave(event) {
@@ -984,48 +1007,36 @@
       if (!list || !draggedId) return;
       event.preventDefault();
 
-      var newStatus = list.getAttribute("data-status");
-      var targetCard = event.target.closest(".card");
-
-      // 自分自身の上へドロップした場合は位置を変えない（末尾へ飛ぶ不具合を防ぐ）
-      if (targetCard && targetCard.id === draggedId) {
-        clearInsertMarkers();
-        clearDropzones();
-        return;
-      }
-
-      var insertIndex = state.columns[newStatus].length;
-
-      if (targetCard && list.contains(targetCard)) {
-        var rect = targetCard.getBoundingClientRect();
-        var isBefore = event.clientY < rect.top + rect.height / 2;
-        var targetIndex = state.columns[newStatus].indexOf(targetCard.id);
-        insertIndex = isBefore ? targetIndex : targetIndex + 1;
-      }
-
-      moveCard(draggedId, newStatus, insertIndex);
+      moveCard(draggedId, list.getAttribute("data-status"), getInsertIndex(list, event.clientY));
 
       clearInsertMarkers();
       clearDropzones();
     }
 
-    function moveCard(id, newStatus, insertIndex) {
-      var oldStatus = null;
-      STATUSES.forEach(function (status) {
-        var index = state.columns[status].indexOf(id);
-        if (index !== -1) {
-          oldStatus = status;
-          state.columns[status].splice(index, 1);
-          if (status === newStatus && index < insertIndex) {
-            insertIndex -= 1;
-          }
+    function findStatusOf(id) {
+      for (var i = 0; i < STATUSES.length; i++) {
+        if (state.columns[STATUSES[i]].indexOf(id) !== -1) {
+          return STATUSES[i];
         }
-      });
+      }
+      return null;
+    }
+
+    // insertIndex は「移動前の並び」での位置。移動元から取り除いた分だけ
+    // 位置がずれるため、同じ列で前から後ろへ動かす場合は1つ手前に補正する。
+    function moveCard(id, newStatus, insertIndex) {
+      var oldStatus = findStatusOf(id);
       if (oldStatus === null) return;
 
+      var oldIndex = state.columns[oldStatus].indexOf(id);
+      state.columns[oldStatus].splice(oldIndex, 1);
+
+      if (oldStatus === newStatus && oldIndex < insertIndex) {
+        insertIndex -= 1;
+      }
+
       var target = state.columns[newStatus];
-      insertIndex = Math.max(0, Math.min(insertIndex, target.length));
-      target.splice(insertIndex, 0, id);
+      target.splice(Math.max(0, Math.min(insertIndex, target.length)), 0, id);
 
       persist();
       Renderer.renderAll();
@@ -1063,6 +1074,7 @@
     ThemeManager.init(document.getElementById("theme-select"));
     state = BoardStore.load();
     Renderer.renderAll();
+    STATUSES.forEach(Renderer.renderAddCardArea);
     DragAndDrop.init(document.getElementById("board"));
     initResetButton(document.getElementById("reset-button"));
   });
