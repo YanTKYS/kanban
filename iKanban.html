@@ -506,24 +506,59 @@
   var BoardStore = (function () {
     var STORAGE_KEY = "ikanban.board.v1";
 
-    function load() {
-      try {
-        var raw = window.localStorage.getItem(STORAGE_KEY);
-        if (!raw) {
-          var initial = buildInitialBoard();
-          save(initial);
-          return initial;
-        }
-        var parsed = JSON.parse(raw);
-        if (!parsed || !parsed.cards || !parsed.columns) {
-          throw new Error("invalid board data");
-        }
-        return parsed;
-      } catch (e) {
-        var fallback = buildInitialBoard();
-        save(fallback);
-        return fallback;
+    // 4列すべてがID配列として揃っているか、cardsがオブジェクトかを確認する。
+    // 一部の列だけ欠損したデータをここで弾き、描画時のエラーを防ぐ。
+    function isValidBoard(data) {
+      if (!data || typeof data.cards !== "object" || data.cards === null) {
+        return false;
       }
+      if (!data.columns || typeof data.columns !== "object") {
+        return false;
+      }
+      return STATUSES.every(function (status) {
+        return Array.isArray(data.columns[status]);
+      });
+    }
+
+    // 破損データは上書きせず、復旧前に退避キーへ保存しておく。
+    function backupCorruptedData(raw) {
+      try {
+        var backupKey = STORAGE_KEY + ".corrupted." + Date.now();
+        window.localStorage.setItem(backupKey, raw);
+      } catch (e) {
+        // 退避にも失敗した場合はそのまま復旧処理を続ける
+      }
+    }
+
+    function load() {
+      var raw = null;
+      try {
+        raw = window.localStorage.getItem(STORAGE_KEY);
+      } catch (e) {
+        raw = null;
+      }
+
+      if (!raw) {
+        var initial = buildInitialBoard();
+        save(initial);
+        return initial;
+      }
+
+      var parsed = null;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (e) {
+        parsed = null;
+      }
+
+      if (isValidBoard(parsed)) {
+        return parsed;
+      }
+
+      backupCorruptedData(raw);
+      var recovered = buildInitialBoard();
+      save(recovered);
+      return recovered;
     }
 
     function save(board) {
@@ -923,9 +958,17 @@
 
       var newStatus = list.getAttribute("data-status");
       var targetCard = event.target.closest(".card");
+
+      // 自分自身の上へドロップした場合は位置を変えない（末尾へ飛ぶ不具合を防ぐ）
+      if (targetCard && targetCard.id === draggedId) {
+        clearInsertMarkers();
+        clearDropzones();
+        return;
+      }
+
       var insertIndex = state.columns[newStatus].length;
 
-      if (targetCard && targetCard.id !== draggedId && list.contains(targetCard)) {
+      if (targetCard && list.contains(targetCard)) {
         var rect = targetCard.getBoundingClientRect();
         var isBefore = event.clientY < rect.top + rect.height / 2;
         var targetIndex = state.columns[newStatus].indexOf(targetCard.id);
