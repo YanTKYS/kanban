@@ -176,7 +176,6 @@
   select:focus-visible,
   input:focus-visible,
   textarea:focus-visible,
-  .card:focus-visible,
   .card-title-btn:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 2px;
@@ -226,14 +225,17 @@
     flex-shrink: 0;
   }
 
+  /* 列名は利用者が変更できるため、長い名前でも列からはみ出さないよう折り返す */
   .column-header h2 {
     font-size: 14px;
     font-weight: 600;
     margin: 0;
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .column-title {
-    display: inline-flex;
+    display: flex;
     align-items: baseline;
     gap: 4px;
     min-width: 0;
@@ -325,12 +327,15 @@
     outline-offset: -2px;
   }
 
+  /* 削除ボタン（右上に絶対配置）を避けるための余白は、重なるタイトル行だけに
+     持たせる。カード全体に右余白を付けると、編集フォームを開いたときに
+     入力欄がその分だけ狭くなってしまうため */
   .card {
     position: relative;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
-    padding: 10px 30px 10px 12px;
+    padding: 10px 12px;
     box-shadow: var(--shadow);
     cursor: grab;
   }
@@ -351,26 +356,29 @@
     box-shadow: var(--shadow), inset 0 -3px 0 0 var(--insert-line);
   }
 
+  /* URLなど途中で改行できない文字列をタイトルにしてもカード内に収まるよう
+     折り返す（指定が無いと文字列が隣の列まではみ出して重なる） */
   .card-title-btn {
     display: block;
     width: 100%;
     text-align: left;
     background: none;
     border: none;
-    padding: 0;
+    padding: 0 22px 0 0;
     margin: 0 0 6px;
     font-size: 14px;
     font-weight: 600;
     color: var(--text);
     cursor: pointer;
     font-family: inherit;
+    overflow-wrap: anywhere;
   }
 
   .card-note {
     font-size: 12px;
     color: var(--text-muted);
     white-space: pre-wrap;
-    word-break: break-word;
+    overflow-wrap: anywhere;
   }
 
   .card-delete {
@@ -483,7 +491,7 @@
 <header>
   <div>
     <h1>iKanban</h1>
-    <p class="subtitle">個人用の実用最小Kanban（v0.2.3）</p>
+    <p class="subtitle">個人用の実用最小Kanban（v0.2.4）</p>
   </div>
   <div class="header-controls">
     <div class="header-actions">
@@ -508,7 +516,7 @@
   <div class="board" id="board">
     <section class="column" data-status="todo">
       <div class="column-header">
-        <span class="column-title" data-status="todo"></span>
+        <div class="column-title" data-status="todo"></div>
         <span class="column-count" data-count-for="todo">0</span>
       </div>
       <div class="card-list" data-status="todo"></div>
@@ -517,7 +525,7 @@
 
     <section class="column" data-status="doing">
       <div class="column-header">
-        <span class="column-title" data-status="doing"></span>
+        <div class="column-title" data-status="doing"></div>
         <span class="column-count" data-count-for="doing">0</span>
       </div>
       <div class="card-list" data-status="doing"></div>
@@ -526,7 +534,7 @@
 
     <section class="column" data-status="review">
       <div class="column-header">
-        <span class="column-title" data-status="review"></span>
+        <div class="column-title" data-status="review"></div>
         <span class="column-count" data-count-for="review">0</span>
       </div>
       <div class="card-list" data-status="review"></div>
@@ -535,7 +543,7 @@
 
     <section class="column" data-status="done">
       <div class="column-header">
-        <span class="column-title" data-status="done"></span>
+        <div class="column-title" data-status="done"></div>
         <span class="column-count" data-count-for="done">0</span>
       </div>
       <div class="card-list" data-status="done"></div>
@@ -659,9 +667,15 @@
     // 使えないコピーだけが際限なく溜まってしまうため）。
     var CORRUPTED_KEY = "ikanban.board.v1.corrupted";
 
-    // 4列すべてがID配列として揃っていて、参照先のカードが実在するかを確認する。
-    // 一部の列だけ欠損したデータや、存在しないカードIDを参照するデータを
-    // ここで弾き、描画時のエラーを防ぐ。
+    // 描画に必要な形（タイトルを持つオブジェクト）かを確認する。
+    // 補足（note）は任意項目なので、無くても妥当なカードとして扱う。
+    function isValidCard(card) {
+      return !!card && typeof card === "object" && typeof card.title === "string";
+    }
+
+    // 4列すべてがID配列として揃っていて、参照先のカードが実在し、かつ
+    // 描画できる形になっているかを確認する。一部の列だけ欠損したデータや、
+    // 中身が壊れたカードをここで弾き、描画時のエラー（画面が真っ白になる）を防ぐ。
     function isValidBoard(data) {
       if (!data || typeof data.cards !== "object" || data.cards === null) {
         return false;
@@ -672,7 +686,7 @@
       return STATUSES.every(function (status) {
         var ids = data.columns[status];
         return Array.isArray(ids) && ids.every(function (id) {
-          return Object.prototype.hasOwnProperty.call(data.cards, id);
+          return Object.prototype.hasOwnProperty.call(data.cards, id) && isValidCard(data.cards[id]);
         });
       });
     }
@@ -722,7 +736,6 @@
     var DEFAULT_THEME = "light";
     var ALLOWED_THEMES = ["light", "dark", "blue"];
     var selectEl = null;
-    var current = DEFAULT_THEME;
 
     function isValidTheme(theme) {
       return ALLOWED_THEMES.indexOf(theme) !== -1;
@@ -739,7 +752,12 @@
     // 画面への反映のみを行う。保存の成否に関わらず、選択した瞬間に必ず呼ばれる。
     function apply(theme) {
       document.documentElement.setAttribute("data-theme", theme);
-      current = theme;
+    }
+
+    // 現在のテーマは実際に適用されている値をそのまま返す。
+    // 別途変数で覚えておくと、apply との食い違いが起こりうるため持たない。
+    function getCurrent() {
+      return document.documentElement.getAttribute("data-theme");
     }
 
     // 保存のみを行う。失敗してもその場の表示（apply）には影響させない。
@@ -777,10 +795,6 @@
         selectEl.value = next;
       }
       return saved;
-    }
-
-    function getCurrent() {
-      return current;
     }
 
     return { init: init, isValidTheme: isValidTheme, setAndPersist: setAndPersist, getCurrent: getCurrent };
@@ -916,10 +930,11 @@
       return document.querySelector('.card-list[data-status="' + status + '"]');
     }
 
-    // 件数は実際に表示しているカード数から数えるため、画面と食い違うことがない
+    // 件数は保存対象である state から数える。DOMの子要素数から数えると、
+    // 描画対象の要素が見つからなかった場合に保存内容と表示がずれてしまう。
     function updateCount(status) {
       document.querySelector('[data-count-for="' + status + '"]').textContent =
-        String(listOf(status).children.length);
+        String(state.columns[status].length);
     }
 
     function renderAll() {
@@ -974,10 +989,8 @@
       el.remove();
       list.insertBefore(el, list.children[index] || null);
 
+      updateCount(oldStatus);
       updateCount(newStatus);
-      if (oldStatus !== newStatus) {
-        updateCount(oldStatus);
-      }
     }
 
     // カードがどの列にあるかは state.columns が持つため、要素側には持たせない
@@ -1015,8 +1028,7 @@
       deleteBtn.className = "card-delete";
       deleteBtn.setAttribute("aria-label", "このカードを削除: " + card.title);
       deleteBtn.textContent = "×";
-      deleteBtn.addEventListener("click", function (event) {
-        event.stopPropagation();
+      deleteBtn.addEventListener("click", function () {
         if (window.confirm("このカードを削除しますか？\n「" + card.title + "」")) {
           CardActions.deleteCard(id);
         }
@@ -1241,14 +1253,17 @@
         showDisplay(status);
       });
 
-      // 空文字だけの列名は保存しない（inputのrequiredでブラウザが送信を止める）
+      // 空白だけの列名は保存しない。カードのフォームと同じく、入力欄をトリム後の
+      // 値へ揃えたうえでブラウザ標準の必須チェックを出すことで、「保存を押しても
+      // 何も起きない」状態を防ぐ。
       form.addEventListener("submit", function (event) {
         event.preventDefault();
-        var trimmed = input.value.trim();
-        if (!trimmed) {
+        input.value = input.value.trim();
+        if (!input.value) {
+          input.reportValidity();
           return;
         }
-        columnLabels[status] = trimmed;
+        columnLabels[status] = input.value;
         if (!ColumnLabels.save(columnLabels)) {
           notifySaveFailure();
         }
