@@ -785,19 +785,23 @@
       });
     }
 
-    // バックアップ復元・取り消し時に外部からテーマを設定するための入口。
-    // 表示・保存・セレクトボックスの選択状態を一括で揃え、保存の成否を返す。
-    function setAndPersist(theme) {
+    // バックアップ復元・取り消しでは、3種類の保存がすべて成功してから
+    // 画面を切り替える。そのため保存と表示反映を別々に呼べるようにする。
+    function setCurrent(theme) {
       var next = sanitizeTheme(theme);
       apply(next);
-      var saved = save(next);
       if (selectEl) {
         selectEl.value = next;
       }
-      return saved;
     }
 
-    return { init: init, isValidTheme: isValidTheme, setAndPersist: setAndPersist, getCurrent: getCurrent };
+    return {
+      init: init,
+      isValidTheme: isValidTheme,
+      save: save,
+      setCurrent: setCurrent,
+      getCurrent: getCurrent
+    };
   })();
 
   /* ============================================================
@@ -1558,23 +1562,32 @@
       undoBtnEl.disabled = loadBeforeRestoreSnapshot() === null;
     }
 
-    // data（board / columnLabels / テーマ）を画面へ反映し、保存する。
-    // 3つとも保存できたときだけ true を返す（途中で打ち切らず全て試す）。
-    // 描画は既存の Renderer / ColumnLabelEditor をそのまま使い、
-    // 復元専用の描画ロジックは増やさない。
-    function applyData(data) {
-      state = { cards: data.board.cards, columns: data.board.columns };
-      columnLabels = ColumnLabels.sanitize(data.columnLabels);
+    // 3種類の保存がすべて成功した場合にだけ、メモリ上の状態と画面を切り替える。
+    // 途中の保存に失敗した場合は previousData を書き戻す。従来は先に画面を
+    // 切り替えていたため、復元や取り消しに失敗しても一部だけが画面に残り、
+    // 再読み込み後の内容と食い違っていた。
+    function applyData(data, previousData) {
+      var nextLabels = ColumnLabels.sanitize(data.columnLabels);
+      var boardSaved = BoardStore.save(data.board);
+      var labelsSaved = ColumnLabels.save(nextLabels);
+      var themeSaved = ThemeManager.save(data.theme);
 
-      var boardSaved = BoardStore.save(state);
-      var labelsSaved = ColumnLabels.save(columnLabels);
-      var themeSaved = ThemeManager.setAndPersist(data.theme);
+      if (!(boardSaved && labelsSaved && themeSaved)) {
+        BoardStore.save(previousData.board);
+        ColumnLabels.save(previousData.columnLabels);
+        ThemeManager.save(previousData.theme);
+        return false;
+      }
+
+      state = { cards: data.board.cards, columns: data.board.columns };
+      columnLabels = nextLabels;
+      ThemeManager.setCurrent(data.theme);
 
       Renderer.renderAll();
       STATUSES.forEach(Renderer.renderAddCardArea);
       ColumnLabelEditor.renderAll();
 
-      return boardSaved && labelsSaved && themeSaved;
+      return true;
     }
 
     function restore(data) {
@@ -1588,13 +1601,11 @@
         return;
       }
 
-      if (applyData(data)) {
+      if (applyData(data, beforeRestore)) {
         window.alert("復元が完了しました。");
       } else {
-        // 一部だけ保存された中途半端な状態を残さないよう、復元前の内容へ戻す。
         // 復元しなかったことになるので、取り消し用の退避データも消しておく
         // （残すと「取り消せる復元」が無いのにボタンが有効になってしまう）。
-        applyData(beforeRestore);
         Storage.remove(BEFORE_RESTORE_KEY);
         window.alert(
           "復元内容を保存できなかったため、復元を中止して元の内容へ戻しました。\n" +
@@ -1659,16 +1670,15 @@
         return;
       }
 
-      // 取り消し自体が「安全な状態への復帰」なので、これ以上戻す先はない。
-      // 保存に失敗しても表示は取り消し後のまま残し、その旨だけを伝える。
-      if (applyData(snapshot)) {
+      var beforeUndo = buildExportData();
+      if (applyData(snapshot, beforeUndo)) {
         // 取り消しは直前1回分のみを対象とするため、使った退避データは消費する
         Storage.remove(BEFORE_RESTORE_KEY);
         window.alert("取り消しが完了しました。");
       } else {
         window.alert(
-          "取り消し後の内容を保存できませんでした。表示は取り消し後の内容になっていますが、\n" +
-          "再読み込みすると保存できなかった項目が元に戻る可能性があります。もう一度お試しください。"
+          "取り消し後の内容を保存できなかったため、取り消しを中止しました。\n" +
+          "現在のKanbanの内容は変更していません。ブラウザの保存容量などをご確認ください。"
         );
       }
       updateUndoButtonState();
