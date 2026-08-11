@@ -262,11 +262,21 @@
     background: var(--surface);
   }
 
+  /* 列幅が狭いと「保存」「キャンセル」が途中で折り返して読めなくなるため、
+     ボタンは縮めず、幅の調整は入力欄側で行う。
+     min-width: 0 が無いとフォーム自身が列の幅より縮めず、ボタンが列から
+     はみ出して押せなくなるため、あわせて指定する。 */
   .column-label-edit-form {
     display: flex;
     align-items: center;
     gap: 4px;
     flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .column-label-edit-form .btn {
+    flex-shrink: 0;
+    white-space: nowrap;
   }
 
   .column-label-input {
@@ -386,14 +396,21 @@
     background: var(--surface-alt);
   }
 
-  .card-edit-form {
+  /* カードの入力フォーム。追加用と編集用は見た目がほぼ同じなので、
+     共通部分を .card-form にまとめ、違い（枠の有無）だけを個別に指定する */
+  .card-form {
     display: flex;
     flex-direction: column;
     gap: 6px;
   }
 
-  .card-edit-form input,
-  .card-edit-form textarea {
+  .card-form label {
+    font-size: 11.5px;
+    color: var(--text-muted);
+  }
+
+  .card-form input,
+  .card-form textarea {
     font-family: inherit;
     font-size: 13px;
     padding: 6px 8px;
@@ -404,11 +421,11 @@
     resize: vertical;
   }
 
-  .card-edit-form textarea {
+  .card-form textarea {
     min-height: 48px;
   }
 
-  .card-edit-actions {
+  .form-actions {
     display: flex;
     gap: 6px;
     justify-content: flex-end;
@@ -436,41 +453,12 @@
     border-color: var(--accent);
   }
 
+  /* 追加フォームはカード一覧の外（列の下部）に置くため、カードと同じ枠をつける */
   .add-card-form {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 10px;
-  }
-
-  .add-card-form label {
-    font-size: 11.5px;
-    color: var(--text-muted);
-  }
-
-  .add-card-form input,
-  .add-card-form textarea {
-    font-family: inherit;
-    font-size: 13px;
-    padding: 6px 8px;
-    border-radius: 5px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
-    resize: vertical;
-  }
-
-  .add-card-form textarea {
-    min-height: 42px;
-  }
-
-  .add-card-actions {
-    display: flex;
-    gap: 6px;
-    justify-content: flex-end;
   }
 
   .visually-hidden {
@@ -495,7 +483,7 @@
 <header>
   <div>
     <h1>iKanban</h1>
-    <p class="subtitle">個人用の実用最小Kanban（v0.2.2）</p>
+    <p class="subtitle">個人用の実用最小Kanban（v0.2.3）</p>
   </div>
   <div class="header-controls">
     <div class="header-actions">
@@ -566,6 +554,66 @@
   var STATUSES = ["todo", "doing", "review", "done"];
 
   /* ============================================================
+     localStorage の読み書き
+
+     プライベートモードや容量超過では localStorage が例外を投げる。
+     各所で try/catch を書くと扱いがばらつくため、ここに集約する。
+     - 読込は失敗しても null を返す（呼び出し側は「未保存」と同じ扱いでよい）
+     - 書込は成否を真偽値で返す（呼び出し側が利用者へ知らせられるようにする）
+     ============================================================ */
+  var Storage = (function () {
+    function readText(key) {
+      try {
+        return window.localStorage.getItem(key);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function readJSON(key) {
+      var raw = readText(key);
+      if (!raw) {
+        return null;
+      }
+      try {
+        return JSON.parse(raw);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function writeText(key, value) {
+      try {
+        window.localStorage.setItem(key, value);
+        return true;
+      } catch (e) {
+        console.warn("iKanban: 保存に失敗しました（" + key + "）", e);
+        return false;
+      }
+    }
+
+    function writeJSON(key, value) {
+      return writeText(key, JSON.stringify(value));
+    }
+
+    function remove(key) {
+      try {
+        window.localStorage.removeItem(key);
+      } catch (e) {
+        // 削除できなくても実害は小さいため、そのまま続行する
+      }
+    }
+
+    return {
+      readText: readText,
+      readJSON: readJSON,
+      writeText: writeText,
+      writeJSON: writeJSON,
+      remove: remove
+    };
+  })();
+
+  /* ============================================================
      ID生成
      ============================================================ */
   function generateId() {
@@ -606,7 +654,12 @@
   var BoardStore = (function () {
     var STORAGE_KEY = "ikanban.board.v1";
 
-    // 4列すべてがID配列として揃っているか、cardsがオブジェクトかを確認する。
+    // 破損データの退避先。復元前バックアップと同じく固定の1キーで、
+    // 退避のたびに上書きする（世代を残すと、保存容量が足りない状況で
+    // 使えないコピーだけが際限なく溜まってしまうため）。
+    var CORRUPTED_KEY = "ikanban.board.v1.corrupted";
+
+    // 4列すべてがID配列として揃っていて、参照先のカードが実在するかを確認する。
     // 一部の列だけ欠損したデータや、存在しないカードIDを参照するデータを
     // ここで弾き、描画時のエラーを防ぐ。
     function isValidBoard(data) {
@@ -616,39 +669,16 @@
       if (!data.columns || typeof data.columns !== "object") {
         return false;
       }
-      var columnsValid = STATUSES.every(function (status) {
-        return Array.isArray(data.columns[status]);
-      });
-      if (!columnsValid) {
-        return false;
-      }
       return STATUSES.every(function (status) {
-        return data.columns[status].every(function (id) {
+        var ids = data.columns[status];
+        return Array.isArray(ids) && ids.every(function (id) {
           return Object.prototype.hasOwnProperty.call(data.cards, id);
         });
       });
     }
 
-    // 破損データを退避キーへ保存する。成功したかどうかを呼び出し側へ返す。
-    function backupCorruptedData(raw) {
-      try {
-        var backupKey = STORAGE_KEY + ".corrupted." + Date.now();
-        window.localStorage.setItem(backupKey, raw);
-        return true;
-      } catch (e) {
-        console.warn("iKanban: 破損データの退避に失敗しました。", e);
-        return false;
-      }
-    }
-
     function load() {
-      var raw = null;
-      try {
-        raw = window.localStorage.getItem(STORAGE_KEY);
-      } catch (e) {
-        raw = null;
-      }
-
+      var raw = Storage.readText(STORAGE_KEY);
       if (!raw) {
         var initial = buildInitialBoard();
         save(initial);
@@ -666,10 +696,9 @@
         return parsed;
       }
 
-      var backedUp = backupCorruptedData(raw);
       var recovered = buildInitialBoard();
-      if (backedUp) {
-        // 退避に成功した場合のみ、元データを初期データで上書きする
+      if (Storage.writeText(CORRUPTED_KEY, raw)) {
+        // 退避できた場合のみ、元データを初期データで上書きする
         save(recovered);
       } else {
         console.warn("iKanban: 破損データを退避できなかったため、保存データは上書きしていません。今回は初期データで表示します。");
@@ -679,22 +708,10 @@
 
     // 保存に成功したかどうかを呼び出し側が判定できるよう真偽値を返す。
     function save(board) {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(board));
-        return true;
-      } catch (e) {
-        console.warn("iKanban: 保存に失敗しました。変更が次回起動時に反映されない可能性があります。", e);
-        return false;
-      }
+      return Storage.writeJSON(STORAGE_KEY, board);
     }
 
-    function reset() {
-      var initial = buildInitialBoard();
-      save(initial);
-      return initial;
-    }
-
-    return { load: load, save: save, reset: reset, isValidBoard: isValidBoard };
+    return { load: load, save: save, isValidBoard: isValidBoard };
   })();
 
   /* ============================================================
@@ -728,22 +745,11 @@
     // 保存のみを行う。失敗してもその場の表示（apply）には影響させない。
     // 保存に成功したかどうかを呼び出し側が判定できるよう真偽値を返す。
     function save(theme) {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, theme);
-        return true;
-      } catch (e) {
-        console.warn("iKanban: テーマの保存に失敗しました。", e);
-        return false;
-      }
+      return Storage.writeText(STORAGE_KEY, theme);
     }
 
     function load() {
-      try {
-        var stored = window.localStorage.getItem(STORAGE_KEY);
-        return stored ? sanitizeTheme(stored) : DEFAULT_THEME;
-      } catch (e) {
-        return DEFAULT_THEME;
-      }
+      return sanitizeTheme(Storage.readText(STORAGE_KEY));
     }
 
     function init(el) {
@@ -787,14 +793,6 @@
     var STORAGE_KEY = "ikanban.columnLabels.v1";
     var DEFAULT_LABELS = { todo: "未着手", doing: "作業中", review: "確認待ち", done: "完了" };
 
-    function cloneDefaults() {
-      var result = {};
-      STATUSES.forEach(function (status) {
-        result[status] = DEFAULT_LABELS[status];
-      });
-      return result;
-    }
-
     function isValidLabels(data) {
       if (!data || typeof data !== "object") {
         return false;
@@ -816,27 +814,14 @@
       return result;
     }
 
+    // 未保存（null）でも sanitize が全列を既定値で埋めるため、分岐は不要。
     function load() {
-      try {
-        var raw = window.localStorage.getItem(STORAGE_KEY);
-        if (!raw) {
-          return cloneDefaults();
-        }
-        return sanitize(JSON.parse(raw));
-      } catch (e) {
-        return cloneDefaults();
-      }
+      return sanitize(Storage.readJSON(STORAGE_KEY));
     }
 
     // 保存に成功したかどうかを呼び出し側が判定できるよう真偽値を返す。
     function save(labels) {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(labels));
-        return true;
-      } catch (e) {
-        console.warn("iKanban: 列表示名の保存に失敗しました。", e);
-        return false;
-      }
+      return Storage.writeJSON(STORAGE_KEY, labels);
     }
 
     return { load: load, save: save, sanitize: sanitize, isValidLabels: isValidLabels };
@@ -882,29 +867,20 @@
   /* ============================================================
      カード操作（追加・編集・削除）
      ============================================================ */
+  // title / note は入力フォーム側でトリムと必須チェックを済ませてから渡す。
   var CardActions = (function () {
     function addCard(status, title, note) {
-      var trimmedTitle = title.trim();
-      if (!trimmedTitle) {
-        return false;
-      }
       var id = generateId();
-      state.cards[id] = { title: trimmedTitle, note: note.trim() };
+      state.cards[id] = { title: title, note: note };
       state.columns[status].push(id);
       persist();
       Renderer.appendCard(status, id);
-      return true;
     }
 
     function editCard(id, title, note) {
-      var trimmedTitle = title.trim();
-      if (!trimmedTitle) {
-        return false;
-      }
-      state.cards[id] = { title: trimmedTitle, note: note.trim() };
+      state.cards[id] = { title: title, note: note };
       persist();
       Renderer.refreshCard(id);
-      return true;
     }
 
     function deleteCard(id) {
@@ -954,11 +930,10 @@
       var list = listOf(status);
       list.innerHTML = "";
 
+      // 参照先のカードが実在することは保存データの検証で保証済みなので、
+      // ここでは間引かずにそのまま並べる（間引くとDOMとstateの並びがずれる）
       state.columns[status].forEach(function (id) {
-        var card = state.cards[id];
-        if (card) {
-          list.appendChild(buildCardElement(id, card, status));
-        }
+        list.appendChild(buildCardElement(id, state.cards[id]));
       });
 
       updateCount(status);
@@ -968,7 +943,7 @@
     // 「追加できていない」ように見えるため、末尾までスクロールして見せる。
     function appendCard(status, id) {
       var list = listOf(status);
-      list.appendChild(buildCardElement(id, state.cards[id], status));
+      list.appendChild(buildCardElement(id, state.cards[id]));
       updateCount(status);
       list.scrollTop = list.scrollHeight;
     }
@@ -997,7 +972,6 @@
 
       var list = listOf(newStatus);
       el.remove();
-      el.setAttribute("data-status", newStatus);
       list.insertBefore(el, list.children[index] || null);
 
       updateCount(newStatus);
@@ -1006,12 +980,12 @@
       }
     }
 
-    function buildCardElement(id, card, status) {
+    // カードがどの列にあるかは state.columns が持つため、要素側には持たせない
+    function buildCardElement(id, card) {
       var el = document.createElement("div");
       el.className = "card";
       el.draggable = true;
       el.id = id;
-      el.setAttribute("data-status", status);
       renderCardDisplay(el, id, card);
       return el;
     }
@@ -1050,65 +1024,99 @@
       el.appendChild(deleteBtn);
     }
 
-    function renderCardEditForm(el, id, card) {
-      el.innerHTML = "";
-      el.draggable = false;
-
+    // カードの入力フォーム（追加用・編集用）を組み立てる。
+    // 両者の違いは「ラベルを見せるか」「ボタンの文言」「保存時の処理」だけなので、
+    // 組み立て自体はここに1つだけ置く。
+    // 戻り値の form を呼び出し側が好きな場所に入れ、titleInput / noteInput で
+    // 追加後のクリアやフォーカス移動を行う。
+    function buildCardForm(config) {
       var form = document.createElement("form");
-      form.className = "card-edit-form";
-
-      var titleLabel = document.createElement("label");
-      titleLabel.className = "visually-hidden";
-      titleLabel.setAttribute("for", "edit-title-" + id);
-      titleLabel.textContent = "タイトル";
+      form.className = config.className;
 
       var titleInput = document.createElement("input");
       titleInput.type = "text";
-      titleInput.id = "edit-title-" + id;
-      titleInput.value = card.title;
+      titleInput.id = config.idPrefix + "-title";
       titleInput.required = true;
-
-      var noteLabel = document.createElement("label");
-      noteLabel.className = "visually-hidden";
-      noteLabel.setAttribute("for", "edit-note-" + id);
-      noteLabel.textContent = "補足";
+      titleInput.value = config.title;
 
       var noteInput = document.createElement("textarea");
-      noteInput.id = "edit-note-" + id;
-      noteInput.value = card.note || "";
+      noteInput.id = config.idPrefix + "-note";
+      noteInput.value = config.note;
 
       var actions = document.createElement("div");
-      actions.className = "card-edit-actions";
+      actions.className = "form-actions";
 
       var cancelBtn = document.createElement("button");
       cancelBtn.type = "button";
       cancelBtn.className = "btn";
-      cancelBtn.textContent = "キャンセル";
-      cancelBtn.addEventListener("click", function () {
-        el.draggable = true;
-        renderCardDisplay(el, id, card);
-      });
+      cancelBtn.textContent = config.cancelLabel;
+      cancelBtn.addEventListener("click", config.onCancel);
 
-      var saveBtn = document.createElement("button");
-      saveBtn.type = "submit";
-      saveBtn.className = "btn btn-primary";
-      saveBtn.textContent = "保存";
+      var submitBtn = document.createElement("button");
+      submitBtn.type = "submit";
+      submitBtn.className = "btn btn-primary";
+      submitBtn.textContent = config.submitLabel;
 
       form.addEventListener("submit", function (event) {
         event.preventDefault();
-        CardActions.editCard(id, titleInput.value, noteInput.value);
+        // 空白だけのタイトルは登録しない。入力欄をトリム後の値へ揃えたうえで
+        // ブラウザ標準の必須チェックを出すことで、「押しても何も起きない」状態を防ぐ。
+        titleInput.value = titleInput.value.trim();
+        if (!titleInput.value) {
+          titleInput.reportValidity();
+          return;
+        }
+        config.onSubmit(titleInput.value, noteInput.value.trim());
       });
 
       actions.appendChild(cancelBtn);
-      actions.appendChild(saveBtn);
-      form.appendChild(titleLabel);
+      actions.appendChild(submitBtn);
+      form.appendChild(buildFieldLabel(titleInput.id, config.titleLabel, config.hideLabels));
       form.appendChild(titleInput);
-      form.appendChild(noteLabel);
+      form.appendChild(buildFieldLabel(noteInput.id, config.noteLabel, config.hideLabels));
       form.appendChild(noteInput);
       form.appendChild(actions);
-      el.appendChild(form);
 
-      titleInput.focus();
+      return { form: form, titleInput: titleInput, noteInput: noteInput };
+    }
+
+    // 編集フォームはカード内の狭い場所に出すためラベルを読み上げ専用にする。
+    // 追加フォームは何を入力する欄か分かるよう、ラベルを見せる。
+    function buildFieldLabel(inputId, text, hidden) {
+      var label = document.createElement("label");
+      label.setAttribute("for", inputId);
+      label.textContent = text;
+      if (hidden) {
+        label.className = "visually-hidden";
+      }
+      return label;
+    }
+
+    function renderCardEditForm(el, id, card) {
+      el.innerHTML = "";
+      el.draggable = false;
+
+      var fields = buildCardForm({
+        className: "card-form",
+        idPrefix: "edit-" + id,
+        hideLabels: true,
+        titleLabel: "タイトル",
+        noteLabel: "補足",
+        title: card.title,
+        note: card.note || "",
+        submitLabel: "保存",
+        cancelLabel: "キャンセル",
+        onSubmit: function (title, note) {
+          CardActions.editCard(id, title, note);
+        },
+        onCancel: function () {
+          el.draggable = true;
+          renderCardDisplay(el, id, card);
+        }
+      });
+
+      el.appendChild(fields.form);
+      fields.titleInput.focus();
     }
 
     // 「+ カードを追加」の領域はカードの内容に依存しないため、
@@ -1131,61 +1139,30 @@
     function renderAddCardForm(area, status) {
       area.innerHTML = "";
 
-      var form = document.createElement("form");
-      form.className = "add-card-form";
-
-      var titleLabel = document.createElement("label");
-      titleLabel.setAttribute("for", "new-title-" + status);
-      titleLabel.textContent = "タイトル（必須）";
-
-      var titleInput = document.createElement("input");
-      titleInput.type = "text";
-      titleInput.id = "new-title-" + status;
-      titleInput.required = true;
-
-      var noteLabel = document.createElement("label");
-      noteLabel.setAttribute("for", "new-note-" + status);
-      noteLabel.textContent = "補足";
-
-      var noteInput = document.createElement("textarea");
-      noteInput.id = "new-note-" + status;
-
-      var actions = document.createElement("div");
-      actions.className = "add-card-actions";
-
-      var cancelBtn = document.createElement("button");
-      cancelBtn.type = "button";
-      cancelBtn.className = "btn";
-      cancelBtn.textContent = "閉じる";
-      cancelBtn.addEventListener("click", function () {
-        renderAddCardArea(status);
-      });
-
-      var addBtn = document.createElement("button");
-      addBtn.type = "submit";
-      addBtn.className = "btn btn-primary";
-      addBtn.textContent = "追加";
-
-      // 追加後もフォームを開いたままにし、続けて入力できるようにする
-      form.addEventListener("submit", function (event) {
-        event.preventDefault();
-        if (CardActions.addCard(status, titleInput.value, noteInput.value)) {
-          titleInput.value = "";
-          noteInput.value = "";
+      var fields = buildCardForm({
+        className: "card-form add-card-form",
+        idPrefix: "new-" + status,
+        hideLabels: false,
+        titleLabel: "タイトル（必須）",
+        noteLabel: "補足",
+        title: "",
+        note: "",
+        submitLabel: "追加",
+        cancelLabel: "閉じる",
+        // 追加後もフォームを開いたままにし、続けて何枚でも登録できるようにする
+        onSubmit: function (title, note) {
+          CardActions.addCard(status, title, note);
+          fields.titleInput.value = "";
+          fields.noteInput.value = "";
+          fields.titleInput.focus();
+        },
+        onCancel: function () {
+          renderAddCardArea(status);
         }
-        titleInput.focus();
       });
 
-      actions.appendChild(cancelBtn);
-      actions.appendChild(addBtn);
-      form.appendChild(titleLabel);
-      form.appendChild(titleInput);
-      form.appendChild(noteLabel);
-      form.appendChild(noteInput);
-      form.appendChild(actions);
-      area.appendChild(form);
-
-      titleInput.focus();
+      area.appendChild(fields.form);
+      fields.titleInput.focus();
     }
 
     return {
@@ -1338,8 +1315,7 @@
     // 表示順とstate.columnsの並び順は一致しているため、この値をそのまま
     // 挿入位置として使える。カードの隙間や余白にドロップされた場合も、
     // 見た目どおりの位置になる。
-    function getInsertIndex(list, clientY) {
-      var cards = list.querySelectorAll(".card");
+    function getInsertIndex(cards, clientY) {
       for (var i = 0; i < cards.length; i++) {
         var rect = cards[i].getBoundingClientRect();
         if (clientY < rect.top + rect.height / 2) {
@@ -1350,9 +1326,8 @@
     }
 
     // 挿入位置を示す線を、対象のカードの上辺または下辺に表示する
-    function showInsertMarker(list, insertIndex) {
+    function showInsertMarker(cards, insertIndex) {
       clearInsertMarker();
-      var cards = list.querySelectorAll(".card");
       if (cards.length === 0) return;
 
       if (insertIndex < cards.length) {
@@ -1404,7 +1379,10 @@
 
       setActiveList(list);
       autoScroll(list, event.clientY);
-      showInsertMarker(list, getInsertIndex(list, event.clientY));
+
+      // 自動スクロール後の位置で判定するため、カードの取得はここで1回だけ行う
+      var cards = list.querySelectorAll(".card");
+      showInsertMarker(cards, getInsertIndex(cards, event.clientY));
     }
 
     // 子要素をまたぐたびにleaveが発生するため、強調中の列から実際に
@@ -1420,7 +1398,7 @@
       event.preventDefault();
 
       var id = draggedEl.id;
-      var insertIndex = getInsertIndex(list, event.clientY);
+      var insertIndex = getInsertIndex(list.querySelectorAll(".card"), event.clientY);
       clearDragFeedback();
       moveCard(id, list.getAttribute("data-status"), insertIndex);
     }
@@ -1468,7 +1446,8 @@
         "列の表示名とテーマは変更されません。よろしいですか？"
       );
       if (!confirmed) return;
-      state = BoardStore.reset();
+      state = buildInitialBoard();
+      persist(); // 保存できなかった場合は persist が利用者へ知らせる
       Renderer.renderAll();
     });
   }
@@ -1553,94 +1532,62 @@
       return true;
     }
 
-    function saveBeforeRestoreSnapshot(snapshot) {
-      try {
-        window.localStorage.setItem(BEFORE_RESTORE_KEY, JSON.stringify(snapshot));
-        return true;
-      } catch (e) {
-        console.warn("iKanban: 復元前バックアップの退避に失敗しました。", e);
-        return false;
-      }
-    }
-
     // 取り消し可能な「直前の復元前状態」を読み込む。存在しない、または
     // 壊れている場合はnullを返す（取り消し不可として扱う）。
     function loadBeforeRestoreSnapshot() {
-      try {
-        var raw = window.localStorage.getItem(BEFORE_RESTORE_KEY);
-        if (!raw) {
-          return null;
-        }
-        var parsed = JSON.parse(raw);
-        return isValidImportData(parsed) ? parsed : null;
-      } catch (e) {
-        return null;
-      }
-    }
-
-    function clearBeforeRestoreSnapshot() {
-      try {
-        window.localStorage.removeItem(BEFORE_RESTORE_KEY);
-      } catch (e) {
-        // 削除に失敗しても実害は小さいため無視する（次回の復元で上書きされる）
-      }
+      var parsed = Storage.readJSON(BEFORE_RESTORE_KEY);
+      return isValidImportData(parsed) ? parsed : null;
     }
 
     function updateUndoButtonState() {
-      if (undoBtnEl) {
-        undoBtnEl.disabled = loadBeforeRestoreSnapshot() === null;
-      }
+      undoBtnEl.disabled = loadBeforeRestoreSnapshot() === null;
     }
 
-    // カード・件数・列表示名・カード追加領域を現在のstate/columnLabelsへ
-    // 揃える。既存のRenderer/ColumnLabelEditorの描画処理をそのまま使い、
+    // data（board / columnLabels / テーマ）を画面へ反映し、保存する。
+    // 3つとも保存できたときだけ true を返す（途中で打ち切らず全て試す）。
+    // 描画は既存の Renderer / ColumnLabelEditor をそのまま使い、
     // 復元専用の描画ロジックは増やさない。
-    function refreshBoardUI() {
-      Renderer.renderAll();
-      STATUSES.forEach(Renderer.renderAddCardArea);
-      ColumnLabelEditor.renderAll();
-    }
-
-    // data（board/columnLabels/theme）を反映・保存する。保存が一部でも
-    // 失敗した場合、rollbackTo が指定されていればその内容へ戻したうえで
-    // 保存し直す（「一部だけ保存されたが成功扱い」という不整合を避けるため）。
-    // rollbackTo が無い場合（取り消し操作自体の失敗時など、戻す先がない場合）
-    // は反映結果をそのまま残し、保存できなかった旨だけを伝える。
-    // 戻り値は保存が全て成功したかどうか。
-    function applyAndPersist(data, rollbackTo, actionLabel) {
+    function applyData(data) {
       state = { cards: data.board.cards, columns: data.board.columns };
       columnLabels = ColumnLabels.sanitize(data.columnLabels);
 
       var boardSaved = BoardStore.save(state);
       var labelsSaved = ColumnLabels.save(columnLabels);
       var themeSaved = ThemeManager.setAndPersist(data.theme);
-      var allSaved = boardSaved && labelsSaved && themeSaved;
 
-      if (!allSaved && rollbackTo) {
-        state = { cards: rollbackTo.board.cards, columns: rollbackTo.board.columns };
-        columnLabels = ColumnLabels.sanitize(rollbackTo.columnLabels);
-        BoardStore.save(state);
-        ColumnLabels.save(columnLabels);
-        ThemeManager.setAndPersist(rollbackTo.theme);
+      Renderer.renderAll();
+      STATUSES.forEach(Renderer.renderAddCardArea);
+      ColumnLabelEditor.renderAll();
+
+      return boardSaved && labelsSaved && themeSaved;
+    }
+
+    function restore(data) {
+      var beforeRestore = buildExportData();
+
+      if (!Storage.writeJSON(BEFORE_RESTORE_KEY, beforeRestore)) {
+        window.alert(
+          "復元前バックアップの退避に失敗したため、復元を中止しました。\n" +
+          "現在のKanbanの内容は変更していません。"
+        );
+        return;
       }
 
-      refreshBoardUI();
-
-      if (allSaved) {
-        window.alert(actionLabel + "が完了しました。");
-      } else if (rollbackTo) {
+      if (applyData(data)) {
+        window.alert("復元が完了しました。");
+      } else {
+        // 一部だけ保存された中途半端な状態を残さないよう、復元前の内容へ戻す。
+        // 復元しなかったことになるので、取り消し用の退避データも消しておく
+        // （残すと「取り消せる復元」が無いのにボタンが有効になってしまう）。
+        applyData(beforeRestore);
+        Storage.remove(BEFORE_RESTORE_KEY);
         window.alert(
-          actionLabel + "内容の保存に失敗したため、" + actionLabel + "を中止し、" + actionLabel + "前の内容へ戻しました。\n" +
+          "復元内容を保存できなかったため、復元を中止して元の内容へ戻しました。\n" +
           "ブラウザの保存容量などをご確認のうえ、もう一度お試しください。"
         );
-      } else {
-        window.alert(
-          actionLabel + "後の内容を保存できませんでした。表示は" + actionLabel + "後の内容になっていますが、\n" +
-          "再読み込みすると保存できなかった項目が元に戻る可能性があります。もう一度お試しください。"
-        );
       }
 
-      return allSaved;
+      updateUndoButtonState();
     }
 
     function restoreFromFile(file) {
@@ -1671,18 +1618,7 @@
           return;
         }
 
-        var previousSnapshot = buildExportData();
-
-        if (!saveBeforeRestoreSnapshot(previousSnapshot)) {
-          window.alert(
-            "復元前バックアップの退避に失敗したため、復元を中止しました。\n" +
-            "現在のKanbanの内容は変更していません。"
-          );
-          return;
-        }
-
-        applyAndPersist(parsed, previousSnapshot, "復元");
-        updateUndoButtonState();
+        restore(parsed);
       };
 
       reader.onerror = function () {
@@ -1708,11 +1644,17 @@
         return;
       }
 
-      // 取り消し自体が「安全な状態への復帰」なので、これ以上戻す先はない
-      var succeeded = applyAndPersist(snapshot, null, "取り消し");
-      if (succeeded) {
+      // 取り消し自体が「安全な状態への復帰」なので、これ以上戻す先はない。
+      // 保存に失敗しても表示は取り消し後のまま残し、その旨だけを伝える。
+      if (applyData(snapshot)) {
         // 取り消しは直前1回分のみを対象とするため、使った退避データは消費する
-        clearBeforeRestoreSnapshot();
+        Storage.remove(BEFORE_RESTORE_KEY);
+        window.alert("取り消しが完了しました。");
+      } else {
+        window.alert(
+          "取り消し後の内容を保存できませんでした。表示は取り消し後の内容になっていますが、\n" +
+          "再読み込みすると保存できなかった項目が元に戻る可能性があります。もう一度お試しください。"
+        );
       }
       updateUndoButtonState();
     }
