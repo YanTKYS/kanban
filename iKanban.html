@@ -181,10 +181,13 @@
     outline-offset: 2px;
   }
 
+  /* ウィンドウが低い（画面が小さい・ブラウザの拡大表示など）ときは、列の
+     最低限の高さ（ヘッダー＋カード一覧＋カード追加）が入りきらなくなる。
+     overflow-y を hidden にしていると、その分がフッターの裏に隠れて
+     「追加」ボタンなどが押せなくなるため、縦もスクロールできるようにする。 */
   main {
     padding: 20px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: auto;
     flex: 1;
     min-height: 0;
     display: flex;
@@ -491,7 +494,7 @@
 <header>
   <div>
     <h1>iKanban</h1>
-    <p class="subtitle">個人用の実用最小Kanban（v0.2.4）</p>
+    <p class="subtitle">個人用の実用最小Kanban（v0.2.5）</p>
   </div>
   <div class="header-controls">
     <div class="header-actions">
