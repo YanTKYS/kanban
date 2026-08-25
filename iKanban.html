@@ -723,7 +723,6 @@
       return recovered;
     }
 
-    // 保存に成功したかどうかを呼び出し側が判定できるよう真偽値を返す。
     function save(board) {
       return Storage.writeJSON(STORAGE_KEY, board);
     }
@@ -764,7 +763,6 @@
     }
 
     // 保存のみを行う。失敗してもその場の表示（apply）には影響させない。
-    // 保存に成功したかどうかを呼び出し側が判定できるよう真偽値を返す。
     function save(theme) {
       return Storage.writeText(STORAGE_KEY, theme);
     }
@@ -840,7 +838,6 @@
       return sanitize(Storage.readJSON(STORAGE_KEY));
     }
 
-    // 保存に成功したかどうかを呼び出し側が判定できるよう真偽値を返す。
     function save(labels) {
       return Storage.writeJSON(STORAGE_KEY, labels);
     }
@@ -1287,7 +1284,6 @@
       input.select();
     }
 
-    // 初期化時、およびバックアップ復元後に全列の表示を現在のcolumnLabelsへ揃える
     function renderAll() {
       STATUSES.forEach(showDisplay);
     }
@@ -1347,7 +1343,6 @@
       return cards.length;
     }
 
-    // 挿入位置を示す線を、対象のカードの上辺または下辺に表示する
     function showInsertMarker(cards, insertIndex) {
       clearInsertMarker();
       if (cards.length === 0) return;
@@ -1565,10 +1560,10 @@
       undoBtnEl.disabled = loadBeforeRestoreSnapshot() === null;
     }
 
-    // 3種類の保存がすべて成功した場合にだけ、メモリ上の状態と画面を切り替える。
-    // 途中の保存に失敗した場合は previousData を書き戻す。従来は先に画面を
-    // 切り替えていたため、復元や取り消しに失敗しても一部だけが画面に残り、
-    // 再読み込み後の内容と食い違っていた。
+    // ボード・列表示名・テーマの3つは、すべて保存できた場合にだけメモリ上の
+    // 状態と画面へ反映する。途中で失敗したまま画面を切り替えると、一部だけが
+    // 反映された表示と再読み込み後の内容が食い違うため、previousData を
+    // 書き戻して呼び出し側に失敗を返す。
     function applyData(data, previousData) {
       var nextLabels = ColumnLabels.sanitize(data.columnLabels);
       var boardSaved = BoardStore.save(data.board);
