@@ -6,55 +6,105 @@
 <title>iKanban</title>
 <style>
   /* ============================================================
-     テーマ変数定義（iKanbanPilot.html と同じ考え方）
-     - :root が既定（Light）テーマ
-     - html[data-theme="xxx"] で各テーマの値を上書きする
-     - レイアウトはテーマ間で共通。配色・境界線・影のみ変化させる
+     デザイン規則（IBM Carbon Design System の考え方を参考にした業務向けUI）
+     - 余白は 4 / 8 / 12 / 16 / 24px の段階だけを使う
+     - 文字は 12px（補助）/ 13px（操作部品）/ 14px（本文・見出し）/ 16px（アプリ名）
+     - 角丸は付けない（0）。区切りは面の色と 1px の境界線で表す
+     - 影は使わない。浮き上がりではなく、色の階層（背景 < 列 < カード）で奥行きを示す
+     - 操作部品の高さは 32px に統一する
+     - 強調色は「主操作」「フォーカス」「挿入位置」にだけ使う
+
+     テーマ変数
+     - :root が既定（Light）テーマ。html[data-theme="xxx"] で値を上書きする
+     - レイアウトはテーマ間で共通。配色だけが変わる
      ============================================================ */
   :root {
-    --bg: #f4f5f7;
-    --surface: #ffffff;
-    --surface-alt: #eceef1;
-    --text: #1b1f24;
-    --text-muted: #5b6470;
-    --border: #d0d5dc;
-    --accent: #2f6fed;
-    --accent-text: #ffffff;
-    --danger: #b3261e;
-    --shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+    --bg: #f4f4f4;             /* ページ背景 */
+    --surface: #ffffff;        /* ヘッダー */
+    --column: #e8e8e8;         /* 列の背景 */
+    --card: #ffffff;           /* カード・追加フォームの背景 */
+    --card-hover: #f4f4f4;
+    --field: #f4f4f4;          /* 入力欄の背景 */
+    --hover: #e8e8e8;          /* ヘッダー上のボタンのホバー面 */
+    --hover-column: #d8d8d8;   /* 列上のボタンのホバー面 */
+    --border: #c6c6c6;         /* 列・ヘッダーなど構造の区切り */
+    --card-border: #e0e0e0;
+    --border-hover: #a8a8a8;
+    --border-strong: #8d8d8d;  /* 入力欄の下線・ボタンの輪郭 */
+    --text: #161616;
+    --text-muted: #525252;
+    --text-disabled: #a8a8a8;
+    --accent: #0f62fe;         /* 文字・線として使う強調色 */
+    --primary: #0f62fe;        /* 主ボタンの面 */
+    --primary-hover: #0353e9;
+    --on-primary: #ffffff;
+    --focus: #0f62fe;
+    --danger: #da1e28;
+    --danger-solid: #da1e28;
+    --on-danger: #ffffff;
+    --dropzone-bg: #d0e2ff;
     --dragging-opacity: 0.5;
-    --dropzone-bg: #e6edff;
-    --insert-line: #2f6fed;
+
+    --sp-1: 4px;
+    --sp-2: 8px;
+    --sp-3: 12px;
+    --sp-4: 16px;
+    --sp-5: 24px;
+    --control-h: 32px;
   }
 
   html[data-theme="dark"] {
-    --bg: #14161a;
-    --surface: #1f232a;
-    --surface-alt: #262b33;
-    --text: #eef1f5;
-    --text-muted: #9aa3b0;
-    --border: #363c46;
-    --accent: #6d9bff;
-    --accent-text: #10131a;
-    --danger: #ff8a80;
-    --shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-    --dropzone-bg: #2a3550;
-    --insert-line: #6d9bff;
+    --bg: #161616;
+    --surface: #262626;
+    --column: #262626;
+    --card: #393939;
+    --card-hover: #474747;
+    --field: #262626;
+    --hover: #393939;
+    --hover-column: #393939;
+    --border: #3d3d3d;
+    --card-border: #4c4c4c;
+    --border-hover: #6f6f6f;
+    --border-strong: #8d8d8d;
+    --text: #f4f4f4;
+    --text-muted: #c6c6c6;
+    --text-disabled: #6f6f6f;
+    --accent: #78a9ff;
+    --primary: #0f62fe;
+    --primary-hover: #0353e9;
+    --on-primary: #ffffff;
+    --focus: #ffffff;
+    --danger: #ff8389;
+    --danger-solid: #da1e28;
+    --on-danger: #ffffff;
+    --dropzone-bg: #1d2f55;
   }
 
   html[data-theme="blue"] {
-    --bg: #eaf2fb;
+    --bg: #edf5ff;
     --surface: #ffffff;
-    --surface-alt: #dbe9fb;
-    --text: #102540;
-    --text-muted: #4a6483;
-    --border: #b7d2f0;
-    --accent: #0b5fcc;
-    --accent-text: #ffffff;
-    --danger: #a3271a;
-    --shadow: 0 1px 2px rgba(11, 95, 204, 0.15);
-    --dropzone-bg: #cfe3fb;
-    --insert-line: #0b5fcc;
+    --column: #d0e2ff;
+    --card: #ffffff;
+    --card-hover: #edf5ff;
+    --field: #edf5ff;
+    --hover: #d0e2ff;
+    --hover-column: #a6c8ff;
+    --border: #a6c8ff;
+    --card-border: #b6d0f7;
+    --border-hover: #78a9ff;
+    --border-strong: #6f8ab8;
+    --text: #001141;
+    --text-muted: #3a4f73;
+    --text-disabled: #7d93b5;
+    --accent: #0043ce;
+    --primary: #0043ce;
+    --primary-hover: #002d9c;
+    --on-primary: #ffffff;
+    --focus: #0043ce;
+    --danger: #a2191f;
+    --danger-solid: #a2191f;
+    --on-danger: #ffffff;
+    --dropzone-bg: #bfd7fb;
   }
 
   * {
@@ -70,123 +120,264 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
-    line-height: 1.5;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+    font-size: 14px;
+    line-height: 1.43;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
   }
 
-  header {
+  button,
+  input,
+  select,
+  textarea {
+    font-family: inherit;
+  }
+
+  /* ---------- ヘッダー ----------
+     左: アプリ名（読むだけの情報） / 右: 操作ツールバー。
+     狭いときは「操作のまとまり」単位で折り返し、ボタン1つずつがばらけないようにする */
+  .app-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-wrap: wrap;
-    gap: 12px;
-    padding: 16px 24px;
+    gap: var(--sp-2) var(--sp-5);
+    min-height: 48px;
+    padding: var(--sp-2) var(--sp-4);
     border-bottom: 1px solid var(--border);
     background: var(--surface);
     flex-shrink: 0;
   }
 
-  header h1 {
-    font-size: 18px;
+  .app-title {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 0 var(--sp-3);
+  }
+
+  .app-title h1 {
+    font-size: 16px;
+    font-weight: 600;
+    line-height: 24px;
     margin: 0;
   }
 
-  header p.subtitle {
-    margin: 4px 0 0;
+  .app-title .subtitle {
+    margin: 0;
     font-size: 12px;
     color: var(--text-muted);
   }
 
-  .header-controls {
+  .toolbar {
     display: flex;
     align-items: center;
-    gap: 16px;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-4);
+  }
+
+  /* 関連する操作は隣り合わせにして枠を共有し、ひとまとまりに見せる */
+  .btn-set {
+    display: inline-flex;
     flex-wrap: wrap;
   }
 
-  .header-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+  .btn-set .btn + .btn {
+    margin-left: -1px;
+  }
+
+  .btn-set .btn:hover,
+  .btn-set .btn:focus-visible {
+    position: relative;
+    z-index: 1;
   }
 
   .theme-switcher {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--sp-2);
   }
 
   .theme-switcher label {
-    font-size: 13px;
+    font-size: 12px;
     color: var(--text-muted);
   }
 
-  .theme-switcher select {
-    font-size: 14px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
+  /* 破壊的操作は他の操作から少し離す（折り返したときは左端に揃える） */
+  @media (min-width: 721px) {
+    .toolbar .btn-danger {
+      margin-left: var(--sp-2);
+    }
   }
 
-  button {
-    font-family: inherit;
-  }
-
+  /* ---------- ボタン ----------
+     .btn          : 通常操作（輪郭のみ）
+     .btn-primary  : 画面内で最も主となる操作（塗り）
+     .btn-ghost    : 補助操作（輪郭なし）
+     .btn-danger   : 破壊的操作（赤。ホバーで塗り） */
   .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-2);
+    height: var(--control-h);
+    padding: 0 var(--sp-3);
     font-size: 13px;
-    padding: 6px 12px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--surface);
+    line-height: 1;
+    white-space: nowrap;
+    border-radius: 0;
+    border: 1px solid var(--border-strong);
+    background: transparent;
     color: var(--text);
     cursor: pointer;
   }
 
   .btn:hover {
-    border-color: var(--accent);
+    background: var(--hover);
   }
 
-  .btn:disabled {
-    opacity: 0.5;
+  .btn:disabled,
+  .btn:disabled:hover {
+    background: transparent;
+    border-color: var(--border);
+    color: var(--text-disabled);
     cursor: not-allowed;
   }
 
-  .btn:disabled:hover {
-    border-color: var(--border);
-  }
-
   .btn-primary {
+    background: var(--primary);
+    border-color: var(--primary);
+    color: var(--on-primary);
+  }
+
+  .btn-primary:hover {
+    background: var(--primary-hover);
+    border-color: var(--primary-hover);
+  }
+
+  .btn-ghost {
+    border-color: transparent;
+  }
+
+  .btn-danger {
+    border-color: transparent;
+    color: var(--danger);
+  }
+
+  .btn-danger:hover {
+    background: var(--danger-solid);
+    color: var(--on-danger);
+  }
+
+  /* 「直前の復元を取り消す」: 取り消せる内容があるときだけ点（●）と強調色で知らせる */
+  .btn-undo:not(:disabled) {
+    color: var(--accent);
+  }
+
+  .btn-undo:not(:disabled)::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
     background: var(--accent);
-    color: var(--accent-text);
-    border-color: var(--accent);
   }
 
-  .btn-xs {
-    font-size: 11.5px;
-    padding: 3px 8px;
-  }
-
+  /* フォーカスは 2px の実線で、背景色に左右されず見えるようにする */
   .btn:focus-visible,
+  .icon-btn:focus-visible,
+  .card-title-btn:focus-visible,
+  .add-card-trigger:focus-visible,
   select:focus-visible,
   input:focus-visible,
-  textarea:focus-visible,
-  .card-title-btn:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
+  textarea:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
   }
 
-  /* ウィンドウが低い（画面が小さい・ブラウザの拡大表示など）ときは、列の
-     最低限の高さ（ヘッダー＋カード一覧＋カード追加）が入りきらなくなる。
-     overflow-y を hidden にしていると、その分がフッターの裏に隠れて
-     「追加」ボタンなどが押せなくなるため、縦もスクロールできるようにする。 */
+  /* ---------- 入力部品（カード追加・カード編集・列名編集で共通） ---------- */
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+  }
+
+  .field label {
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--text-muted);
+  }
+
+  .form input[type="text"],
+  .form textarea,
+  .theme-switcher select {
+    width: 100%;
+    height: var(--control-h);
+    padding: 0 var(--sp-3);
+    font-size: 14px;
+    border: none;
+    border-bottom: 1px solid var(--border-strong);
+    border-radius: 0;
+    background: var(--field);
+    color: var(--text);
+  }
+
+  .form textarea {
+    height: auto;
+    min-height: 64px;
+    padding: var(--sp-2) var(--sp-3);
+    line-height: 1.43;
+    resize: vertical;
+  }
+
+  .theme-switcher select {
+    width: auto;
+    padding: 0 var(--sp-2);
+    font-size: 13px;
+  }
+
+  .form-actions {
+    display: flex;
+    gap: var(--sp-2);
+    justify-content: flex-end;
+  }
+
+  /* アイコンだけのボタン（列名編集・カード削除）。名前は aria-label と title で伝える */
+  .icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .icon-btn svg {
+    width: 16px;
+    height: 16px;
+    pointer-events: none;
+  }
+
+  /* ---------- ボード・列 ----------
+     ウィンドウが低いときは、列の最低限の高さ（ヘッダー＋カード一覧＋カード追加）が
+     入りきらなくなる。overflow-y を hidden にするとその分がフッターの裏に隠れて
+     「追加」ボタンなどが押せなくなるため、main は縦横ともスクロールできるようにする */
   main {
-    padding: 20px;
+    padding: var(--sp-4);
     overflow: auto;
     flex: 1;
     min-height: 0;
@@ -196,131 +387,102 @@
 
   .board {
     display: flex;
-    gap: 16px;
-    min-width: 960px;
+    gap: var(--sp-3);
+    min-width: calc(4 * 240px + 3 * var(--sp-3));
     flex: 1;
     min-height: 0;
   }
 
-  /* 列自体の高さは .board（main の残り高さ）に合わせて伸縮する。
-     カードが増えても列の外枠は伸びず、内側の .card-list だけが
-     スクロールする（下部で overflow-y: auto を指定） */
+  /* 列の高さは .board（main の残り高さ）に合わせて伸縮する。
+     カードが増えても列の外枠は伸びず、内側の .card-list だけがスクロールする */
   .column {
     flex: 1 1 0;
     min-width: 240px;
-    background: var(--surface-alt);
+    background: var(--column);
     border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 12px;
     display: flex;
     flex-direction: column;
   }
 
-  /* ヘッダーとカード追加領域はスクロールさせない固定部分 */
+  /* 列ヘッダーとカード追加領域はスクロールさせない固定部分 */
   .column-header {
     display: flex;
-    align-items: baseline;
+    align-items: center;
     justify-content: space-between;
-    flex-wrap: wrap;
-    padding: 4px 4px 12px;
-    border-bottom: 2px solid var(--border);
-    margin-bottom: 10px;
+    gap: var(--sp-2);
+    min-height: 40px;
+    padding: var(--sp-2) var(--sp-3);
+    border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
 
+  .column-title {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-1);
+    flex: 1;
+    min-width: 0;
+  }
+
   /* 列名は利用者が変更できるため、長い名前でも列からはみ出さないよう折り返す */
-  .column-header h2 {
+  .column-title h2 {
     font-size: 14px;
     font-weight: 600;
+    line-height: 20px;
     margin: 0;
     min-width: 0;
     overflow-wrap: anywhere;
   }
 
-  .column-title {
-    display: flex;
-    align-items: baseline;
-    gap: 4px;
-    min-width: 0;
+  /* 件数は補助情報。数字だけを控えめに右端へ置く */
+  .column-count {
+    flex-shrink: 0;
+    min-width: 24px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
   }
 
-  /* 列名の編集ボタン。カード操作（追加・削除）より主張しないよう、
-     通常時は控えめな不透明度にし、ホバー・フォーカス時のみ強調する */
+  /* 列名編集中は、フォームを列幅いっぱいに使うため件数を隠す */
+  .column-header:has(.form) .column-count {
+    display: none;
+  }
+
   .column-label-edit-btn {
-    flex-shrink: 0;
-    width: 20px;
-    height: 20px;
-    line-height: 1;
-    padding: 0;
-    border: none;
-    border-radius: 4px;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 12px;
-    cursor: pointer;
-    opacity: 0.55;
+    opacity: 0.6;
   }
 
   .column-label-edit-btn:hover,
   .column-label-edit-btn:focus-visible {
     opacity: 1;
-    background: var(--surface);
+    color: var(--text);
+    background: var(--hover-column);
   }
 
-  /* 列幅が狭いと「保存」「キャンセル」が途中で折り返して読めなくなるため、
-     ボタンは縮めず、幅の調整は入力欄側で行う。
-     min-width: 0 が無いとフォーム自身が列の幅より縮めず、ボタンが列から
-     はみ出して押せなくなるため、あわせて指定する。 */
-  .column-label-edit-form {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    flex: 1 1 100%;
+  .column-title .form {
+    flex: 1;
     min-width: 0;
   }
 
-  .column-label-edit-form .btn {
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-
-  .column-label-input {
-    font-family: inherit;
-    font-size: 13px;
-    padding: 3px 6px;
-    border-radius: 5px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
-    flex: 1 1 auto;
-    min-width: 60px;
-  }
-
-  .column-count {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-muted);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 1px 9px;
-    min-width: 22px;
-    text-align: center;
-  }
-
   /* カード一覧のみを列内で独立スクロールさせる部分。
-     min-height を明示しておくことで、カードが増えても列全体を
-     押し広げず、この領域内だけが縦スクロールになる */
+     カードが多い列でもスクロールバーは細く表示し、カードの操作領域を狭めない */
   .card-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--sp-1);
     flex: 1;
     min-height: 60px;
-    border-radius: 8px;
-    padding: 4px;
+    padding: var(--sp-2);
     overflow-y: auto;
-    transition: background-color 0.12s ease;
+    scrollbar-width: thin;
+  }
+
+  .card-list:empty::before {
+    content: "カードがありません";
+    padding: var(--sp-2) var(--sp-1);
+    font-size: 12px;
+    color: var(--text-muted);
   }
 
   /* ドロップ可能であることを示す状態。色だけに頼らず点線枠も併用する */
@@ -330,55 +492,86 @@
     outline-offset: -2px;
   }
 
-  /* 削除ボタン（右上に絶対配置）を避けるための余白は、重なるタイトル行だけに
-     持たせる。カード全体に右余白を付けると、編集フォームを開いたときに
-     入力欄がその分だけ狭くなってしまうため */
+  /* ---------- カード ----------
+     影は使わず、面の色（列より明るい）と 1px の境界線で区切る */
   .card {
     position: relative;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px 12px;
-    box-shadow: var(--shadow);
+    flex-shrink: 0;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    padding: var(--sp-2) var(--sp-3);
     cursor: grab;
+  }
+
+  .card[draggable="false"] {
+    cursor: default;
+  }
+
+  .card:hover:not(:focus-within) {
+    background: var(--card-hover);
+    border-color: var(--border-hover);
+  }
+
+  /* キーボード操作・編集中は、カード全体の枠もフォーカス色にして現在地を示す */
+  .card:has(:focus-visible) {
+    border-color: var(--focus);
   }
 
   .card.dragging {
     opacity: var(--dragging-opacity);
     border-style: dashed;
+    border-color: var(--border-strong);
   }
 
-  /* ドラッグ中に挿入位置を示す線。
-     border で描くとカードの高さが変わり、境界付近でカードが上下に動いて
-     ちらつくため、レイアウトに影響しない内側の影で描画する */
-  .card.insert-before {
-    box-shadow: var(--shadow), inset 0 3px 0 0 var(--insert-line);
+  /* ドラッグ中に挿入位置を示す線。カード間の隙間に疑似要素で描くため、
+     カードの大きさは変わらず、境界付近でカードが上下に動いてちらつくこともない */
+  .card.insert-before::before,
+  .card.insert-after::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent);
+    pointer-events: none;
   }
 
-  .card.insert-after {
-    box-shadow: var(--shadow), inset 0 -3px 0 0 var(--insert-line);
+  .card.insert-before::before {
+    top: -3px;
   }
 
-  /* URLなど途中で改行できない文字列をタイトルにしてもカード内に収まるよう
-     折り返す（指定が無いと文字列が隣の列まではみ出して重なる） */
+  .card.insert-after::after {
+    bottom: -3px;
+  }
+
+  /* 主情報: タイトル。URLなど途中で改行できない文字列でもカード内に収まるよう折り返す。
+     削除ボタン（右上に絶対配置）と重ならないよう、右余白はタイトル行だけに持たせる */
   .card-title-btn {
     display: block;
     width: 100%;
     text-align: left;
     background: none;
     border: none;
-    padding: 0 22px 0 0;
-    margin: 0 0 6px;
+    border-radius: 0;
+    padding: 0 var(--sp-5) 0 0;
+    margin: 0;
     font-size: 14px;
     font-weight: 600;
+    line-height: 20px;
     color: var(--text);
     cursor: pointer;
-    font-family: inherit;
     overflow-wrap: anywhere;
   }
 
+  .card-title-btn:hover {
+    text-decoration: underline;
+  }
+
+  /* 副情報: 補足テキスト */
   .card-note {
+    margin: var(--sp-1) 0 0;
     font-size: 12px;
+    line-height: 16px;
     color: var(--text-muted);
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -386,90 +579,63 @@
 
   .card-delete {
     position: absolute;
-    top: 6px;
-    right: 6px;
-    width: 22px;
-    height: 22px;
-    line-height: 1;
-    padding: 0;
-    border-radius: 5px;
-    border: 1px solid transparent;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 15px;
-    cursor: pointer;
+    top: var(--sp-1);
+    right: var(--sp-1);
   }
 
   .card-delete:hover,
   .card-delete:focus-visible {
-    color: var(--danger);
-    border-color: var(--danger);
-    background: var(--surface-alt);
+    color: var(--on-danger);
+    background: var(--danger-solid);
   }
 
-  /* カードの入力フォーム。追加用と編集用は見た目がほぼ同じなので、
-     共通部分を .card-form にまとめ、違い（枠の有無）だけを個別に指定する */
-  .card-form {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  /* マウスで操作できる環境では、削除ボタンはカードにポインタを置く／フォーカスしたときだけ
+     表示し、通常時は本文の視認性を優先する。タッチ操作の環境では常に表示する */
+  @media (hover: hover) {
+    .card-delete {
+      opacity: 0;
+    }
+
+    .card:hover .card-delete,
+    .card:focus-within .card-delete {
+      opacity: 1;
+    }
   }
 
-  .card-form label {
-    font-size: 11.5px;
-    color: var(--text-muted);
+  /* 編集フォームはカード内に表示する */
+  .card .form {
+    padding: var(--sp-1) 0;
   }
 
-  .card-form input,
-  .card-form textarea {
-    font-family: inherit;
-    font-size: 13px;
-    padding: 6px 8px;
-    border-radius: 5px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    color: var(--text);
-    resize: vertical;
-  }
-
-  .card-form textarea {
-    min-height: 48px;
-  }
-
-  .form-actions {
-    display: flex;
-    gap: 6px;
-    justify-content: flex-end;
-  }
-
+  /* ---------- カード追加領域（列の下部に固定） ---------- */
   .add-card-area {
-    margin-top: 8px;
     flex-shrink: 0;
+    border-top: 1px solid var(--border);
   }
 
   .add-card-trigger {
+    display: block;
     width: 100%;
+    height: 40px;
+    padding: 0 var(--sp-3);
     text-align: left;
     font-size: 13px;
-    padding: 8px 10px;
-    border-radius: 6px;
-    border: 1px dashed var(--border);
+    border: none;
+    border-radius: 0;
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
   }
 
   .add-card-trigger:hover {
+    background: var(--hover-column);
     color: var(--text);
-    border-color: var(--accent);
   }
 
-  /* 追加フォームはカード一覧の外（列の下部）に置くため、カードと同じ枠をつける */
+  /* 展開したフォームは列の下部いっぱいに広げ、カードと同じ面の色にする */
   .add-card-form {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px;
+    padding: var(--sp-3);
+    background: var(--card);
   }
 
   .visually-hidden {
@@ -482,28 +648,34 @@
   }
 
   footer {
-    padding: 12px 24px 24px;
-    font-size: 11.5px;
+    padding: var(--sp-2) var(--sp-4) var(--sp-4);
+    font-size: 12px;
     color: var(--text-muted);
     flex-shrink: 0;
+  }
+
+  /* ヘッダーが狭いときは、ツールバーを次の行へ回して左寄せにする */
+  @media (max-width: 720px) {
+    .toolbar {
+      justify-content: flex-start;
+    }
   }
 </style>
 </head>
 <body>
 
-<header>
-  <div>
+<header class="app-header">
+  <div class="app-title">
     <h1>iKanban</h1>
-    <p class="subtitle">個人用の実用最小Kanban（v0.2.5）</p>
+    <p class="subtitle">個人用の実用最小Kanban（v0.3.0）</p>
   </div>
-  <div class="header-controls">
-    <div class="header-actions">
-      <button type="button" class="btn" id="reset-button">初期状態にリセット</button>
+  <div class="toolbar">
+    <div class="btn-set" role="group" aria-label="バックアップ">
       <button type="button" class="btn" id="export-button">バックアップ出力</button>
       <button type="button" class="btn" id="restore-button">バックアップ復元</button>
-      <button type="button" class="btn" id="undo-restore-button" disabled>直前の復元を取り消す</button>
-      <input type="file" id="restore-file-input" class="visually-hidden" accept="application/json,.json">
+      <button type="button" class="btn btn-undo" id="undo-restore-button" disabled title="取り消せる復元はありません">直前の復元を取り消す</button>
     </div>
+    <input type="file" id="restore-file-input" class="visually-hidden" accept="application/json,.json">
     <div class="theme-switcher">
       <label for="theme-select">テーマ</label>
       <select id="theme-select">
@@ -512,6 +684,7 @@
         <option value="blue">Blue</option>
       </select>
     </div>
+    <button type="button" class="btn btn-danger" id="reset-button">初期状態にリセット</button>
   </div>
 </header>
 
@@ -934,6 +1107,33 @@
       return document.querySelector('.card-list[data-status="' + status + '"]');
     }
 
+    // アイコンだけのボタン（列名編集・カード削除）に使う線画アイコン。
+    // 外部の画像やフォントに依存しないよう、パスをここに持つ。
+    var ICON_PATHS = {
+      edit: "M2 14l1-4 8-8 3 3-8 8-4 1zM9.5 3.5l3 3",
+      close: "M3.5 3.5l9 9M12.5 3.5l-9 9"
+    };
+
+    function buildIconButton(className, iconName, label) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "icon-btn " + className;
+      btn.setAttribute("aria-label", label);
+      btn.title = label;
+
+      var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("viewBox", "0 0 16 16");
+      svg.setAttribute("aria-hidden", "true");
+      svg.setAttribute("fill", "none");
+      svg.setAttribute("stroke", "currentColor");
+      svg.setAttribute("stroke-width", "1.25");
+      var path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      path.setAttribute("d", ICON_PATHS[iconName]);
+      svg.appendChild(path);
+      btn.appendChild(svg);
+      return btn;
+    }
+
     // 件数は保存対象である state から数える。DOMの子要素数から数えると、
     // 描画対象の要素が見つからなかった場合に保存内容と表示がずれてしまう。
     function updateCount(status) {
@@ -975,12 +1175,14 @@
       updateCount(status);
     }
 
-    // 編集フォームを閉じ、更新後の内容で表示に戻す
+    // 編集フォームを閉じ、更新後の内容で表示に戻す。
+    // キーボードで保存した場合に操作の続きを見失わないよう、タイトルへフォーカスを戻す
     function refreshCard(id) {
       var el = document.getElementById(id);
       if (!el) return;
       el.draggable = true;
       renderCardDisplay(el, id, state.cards[id]);
+      el.querySelector(".card-title-btn").focus();
     }
 
     // index は移動後の state.columns[newStatus] における位置。
@@ -1027,11 +1229,7 @@
         el.appendChild(note);
       }
 
-      var deleteBtn = document.createElement("button");
-      deleteBtn.type = "button";
-      deleteBtn.className = "card-delete";
-      deleteBtn.setAttribute("aria-label", "このカードを削除: " + card.title);
-      deleteBtn.textContent = "×";
+      var deleteBtn = buildIconButton("card-delete", "close", "このカードを削除: " + card.title);
       deleteBtn.addEventListener("click", function () {
         if (window.confirm("このカードを削除しますか？\n「" + card.title + "」")) {
           CardActions.deleteCard(id);
@@ -1064,7 +1262,7 @@
 
       var cancelBtn = document.createElement("button");
       cancelBtn.type = "button";
-      cancelBtn.className = "btn";
+      cancelBtn.className = "btn btn-ghost";
       cancelBtn.textContent = config.cancelLabel;
       cancelBtn.addEventListener("click", config.onCancel);
 
@@ -1085,27 +1283,40 @@
         config.onSubmit(titleInput.value, noteInput.value.trim());
       });
 
+      form.addEventListener("keydown", onEscapeCancel(config.onCancel));
+
       actions.appendChild(cancelBtn);
       actions.appendChild(submitBtn);
-      form.appendChild(buildFieldLabel(titleInput.id, config.titleLabel, config.hideLabels));
-      form.appendChild(titleInput);
-      form.appendChild(buildFieldLabel(noteInput.id, config.noteLabel, config.hideLabels));
-      form.appendChild(noteInput);
+      form.appendChild(buildField(titleInput, config.titleLabel));
+      form.appendChild(buildField(noteInput, config.noteLabel));
       form.appendChild(actions);
 
       return { form: form, titleInput: titleInput, noteInput: noteInput };
     }
 
-    // 編集フォームはカード内の狭い場所に出すためラベルを読み上げ専用にする。
-    // 追加フォームは何を入力する欄か分かるよう、ラベルを見せる。
-    function buildFieldLabel(inputId, text, hidden) {
+    // ラベル付きの入力欄。カード追加・カード編集・列名編集で同じ見た目にそろえる。
+    function buildField(inputEl, labelText) {
+      var field = document.createElement("div");
+      field.className = "field";
+
       var label = document.createElement("label");
-      label.setAttribute("for", inputId);
-      label.textContent = text;
-      if (hidden) {
-        label.className = "visually-hidden";
-      }
-      return label;
+      label.setAttribute("for", inputEl.id);
+      label.textContent = labelText;
+
+      field.appendChild(label);
+      field.appendChild(inputEl);
+      return field;
+    }
+
+    // Escキーでフォームを閉じる（3種類のフォームで共通）。
+    // 日本語入力の変換中のEscは変換の取り消しなので、フォームは閉じない。
+    function onEscapeCancel(onCancel) {
+      return function (event) {
+        if (event.key === "Escape" && !event.isComposing) {
+          event.preventDefault();
+          onCancel();
+        }
+      };
     }
 
     function renderCardEditForm(el, id, card) {
@@ -1113,10 +1324,9 @@
       el.draggable = false;
 
       var fields = buildCardForm({
-        className: "card-form",
+        className: "form",
         idPrefix: "edit-" + id,
-        hideLabels: true,
-        titleLabel: "タイトル",
+        titleLabel: "タイトル（必須）",
         noteLabel: "補足",
         title: card.title,
         note: card.note || "",
@@ -1128,6 +1338,7 @@
         onCancel: function () {
           el.draggable = true;
           renderCardDisplay(el, id, card);
+          el.querySelector(".card-title-btn").focus();
         }
       });
 
@@ -1156,9 +1367,8 @@
       area.innerHTML = "";
 
       var fields = buildCardForm({
-        className: "card-form add-card-form",
+        className: "form add-card-form",
         idPrefix: "new-" + status,
-        hideLabels: false,
         titleLabel: "タイトル（必須）",
         noteLabel: "補足",
         title: "",
@@ -1174,6 +1384,7 @@
         },
         onCancel: function () {
           renderAddCardArea(status);
+          area.querySelector(".add-card-trigger").focus();
         }
       });
 
@@ -1184,6 +1395,9 @@
     return {
       renderAll: renderAll,
       renderAddCardArea: renderAddCardArea,
+      buildField: buildField,
+      onEscapeCancel: onEscapeCancel,
+      buildIconButton: buildIconButton,
       appendCard: appendCard,
       removeCard: removeCard,
       refreshCard: refreshCard,
@@ -1201,11 +1415,7 @@
       var h2 = document.createElement("h2");
       h2.textContent = columnLabels[status];
 
-      var editBtn = document.createElement("button");
-      editBtn.type = "button";
-      editBtn.className = "column-label-edit-btn";
-      editBtn.setAttribute("aria-label", "列名を編集: " + columnLabels[status]);
-      editBtn.textContent = "✎";
+      var editBtn = Renderer.buildIconButton("column-label-edit-btn", "edit", "列名を編集: " + columnLabels[status]);
       editBtn.addEventListener("click", function () {
         startEdit(status);
       });
@@ -1219,43 +1429,47 @@
       return document.querySelector('.column-title[data-status="' + status + '"]');
     }
 
-    function showDisplay(status) {
+    function showDisplay(status, restoreFocus) {
       var titleEl = titleElOf(status);
       titleEl.innerHTML = "";
       titleEl.appendChild(buildDisplay(status));
+      if (restoreFocus) {
+        titleEl.querySelector(".column-label-edit-btn").focus();
+      }
     }
 
     function startEdit(status) {
       var titleEl = titleElOf(status);
       titleEl.innerHTML = "";
 
+      // カード追加・編集フォームと同じ部品（.form / .field / .form-actions）で組み立てる
       var form = document.createElement("form");
-      form.className = "column-label-edit-form";
-
-      var label = document.createElement("label");
-      label.className = "visually-hidden";
-      label.setAttribute("for", "column-label-" + status);
-      label.textContent = "列名";
+      form.className = "form";
 
       var input = document.createElement("input");
       input.type = "text";
       input.id = "column-label-" + status;
-      input.className = "column-label-input";
       input.value = columnLabels[status];
       input.required = true;
 
-      var saveBtn = document.createElement("button");
-      saveBtn.type = "submit";
-      saveBtn.className = "btn btn-xs btn-primary";
-      saveBtn.textContent = "保存";
+      var actions = document.createElement("div");
+      actions.className = "form-actions";
 
       var cancelBtn = document.createElement("button");
       cancelBtn.type = "button";
-      cancelBtn.className = "btn btn-xs";
+      cancelBtn.className = "btn btn-ghost";
       cancelBtn.textContent = "キャンセル";
-      cancelBtn.addEventListener("click", function () {
-        showDisplay(status);
-      });
+
+      var saveBtn = document.createElement("button");
+      saveBtn.type = "submit";
+      saveBtn.className = "btn btn-primary";
+      saveBtn.textContent = "保存";
+
+      function cancel() {
+        showDisplay(status, true);
+      }
+      cancelBtn.addEventListener("click", cancel);
+      form.addEventListener("keydown", Renderer.onEscapeCancel(cancel));
 
       // 空白だけの列名は保存しない。カードのフォームと同じく、入力欄をトリム後の
       // 値へ揃えたうえでブラウザ標準の必須チェックを出すことで、「保存を押しても
@@ -1271,13 +1485,13 @@
         if (!ColumnLabels.save(columnLabels)) {
           notifySaveFailure();
         }
-        showDisplay(status);
+        showDisplay(status, true);
       });
 
-      form.appendChild(label);
-      form.appendChild(input);
-      form.appendChild(saveBtn);
-      form.appendChild(cancelBtn);
+      actions.appendChild(cancelBtn);
+      actions.appendChild(saveBtn);
+      form.appendChild(Renderer.buildField(input, "列名（必須）"));
+      form.appendChild(actions);
       titleEl.appendChild(form);
 
       input.focus();
@@ -1285,7 +1499,9 @@
     }
 
     function renderAll() {
-      STATUSES.forEach(showDisplay);
+      STATUSES.forEach(function (status) {
+        showDisplay(status, false);
+      });
     }
 
     return { renderAll: renderAll };
@@ -1557,7 +1773,9 @@
     }
 
     function updateUndoButtonState() {
-      undoBtnEl.disabled = loadBeforeRestoreSnapshot() === null;
+      var available = loadBeforeRestoreSnapshot() !== null;
+      undoBtnEl.disabled = !available;
+      undoBtnEl.title = available ? "直前のバックアップ復元を取り消して、復元前の内容へ戻します" : "取り消せる復元はありません";
     }
 
     // ボード・列表示名・テーマの3つは、すべて保存できた場合にだけメモリ上の
