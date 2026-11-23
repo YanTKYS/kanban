@@ -52,6 +52,95 @@
     --dropzone-bg: #cfe3fb;
   }
 
+  /* 二色刷り（j-risograph-ui）：青の版＝文字・罫・操作・状態、ピンクの版＝版ずれ・網点・ずらした影、選択の地 */
+  html[data-theme="riso"] {
+    --bg: #f3eee2;
+    --surface: #fffdf8;
+    --surface-alt: #ebe4d4;
+    --text: #23397f;
+    --text-muted: #48558a;
+    --border: #2948a0;
+    --accent: #2948a0;
+    --accent-text: #f3eee2;
+    --shadow: 3px 3px 0 #ff579b;
+    --dragging-opacity: 0.5;
+    --dropzone-bg: #fac4db;
+  }
+
+  /* 以下の装飾CSSは二色刷りテーマだけに適用される（他テーマには漏れない） */
+  html[data-theme="riso"] body {
+    font-family: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", "Noto Sans CJK JP", "Noto Sans JP", Meiryo, sans-serif;
+  }
+
+  /* 大見出しの版ずれ：text-shadow（文字を複製しないため読み上げは1回） */
+  html[data-theme="riso"] header h1 {
+    color: var(--accent);
+    font-weight: 900;
+    text-shadow: 4px 3px 0 #ff579b;
+  }
+
+  html[data-theme="riso"] .theme-switcher select {
+    border: 2px solid var(--border);
+    border-radius: 999px;
+    font-weight: 700;
+  }
+
+  html[data-theme="riso"] .column {
+    border: 2px solid var(--border);
+    border-radius: 12px;
+  }
+
+  html[data-theme="riso"] .column-header {
+    border-bottom: 3px solid var(--border);
+  }
+
+  html[data-theme="riso"] .column-header h2 {
+    font-weight: 900;
+  }
+
+  /* 網点の下線（章名の装飾。背景なので読み上げられない） */
+  html[data-theme="riso"] .column-header h2::after {
+    content: "";
+    display: block;
+    width: 72px;
+    height: 8px;
+    margin-top: 5px;
+    background: radial-gradient(circle, #ff579b 0 1.8px, transparent 2.2px) 0 0 / 6px 6px;
+  }
+
+  /* 件数：青の塗りの丸札（数値は青の版） */
+  html[data-theme="riso"] .column-count {
+    background: var(--accent);
+    color: var(--accent-text);
+    border: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  html[data-theme="riso"] .card {
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    font-weight: 500;
+  }
+
+  html[data-theme="riso"] .card-title {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  /* ドロップ可能な列（選択の地）：淡いピンクの網点の地＋青の破線枠 */
+  html[data-theme="riso"] .card-list.dropzone-active {
+    background-color: var(--surface);
+    background-image: radial-gradient(circle, #fac4db 0 1.6px, transparent 2px);
+    background-size: 6px 6px;
+  }
+
+  /* フォーカス：濃い青の外枠＋淡い黄色の外光。選択の地やピンクの影とは別の形 */
+  html[data-theme="riso"] :is(.card, .theme-switcher select):focus-visible {
+    outline: 3px solid var(--text);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 7px #fff3c0;
+  }
+
   * {
     box-sizing: border-box;
   }
@@ -237,6 +326,7 @@
       <option value="light">Light</option>
       <option value="dark">Dark</option>
       <option value="blue">Blue</option>
+      <option value="riso">二色刷り</option>
     </select>
   </div>
 </header>
