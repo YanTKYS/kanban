@@ -55,3 +55,12 @@ open iKanban.html
 ## 外部依存
 
 外部CDN・外部API・外部ライブラリは使用していません。HTML / CSS / JavaScriptのみで構成され、オフラインでも動作します。
+
+## ライセンス
+
+[MIT License](LICENSE)（Copyright (c) 2026 YanTKYS）で公開しています。
+
+- **対象**: このリポジトリの自作部分（`iKanban.html`、`iKanbanPilot.html`、`README.md`、`.github/workflows/pages.yml`）。
+- 2つのHTMLファイルには、単体でコピーされた場合にも許諾文が残るよう、先頭にMITの著作権表示と許諾文をHTMLコメントとして記載しています。
+- GitHub Pagesへ配布する成果物には、`LICENSE` を同梱します。
+- 第三者のコード・ライブラリ・フォント・画像は含みません（[外部依存](#外部依存)を参照）。UIの設計方針は IBM Carbon Design System の考え方を参考にしていますが、そのコードや素材は含みません。
